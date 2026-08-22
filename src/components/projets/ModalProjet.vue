@@ -5,6 +5,9 @@ import AppInput from '@/components/ui/AppInput.vue'
 import AppSelect from '@/components/ui/AppSelect.vue'
 import projetService from '@/services/projetService'
 import utilisateurService from '@/services/utilisateurService'
+import { useToast } from '@/composables/useToast'
+
+const { showToast } = useToast()
 
 const props = defineProps({
   projet: { type: Object, default: null }, // null = création, objet = modification
@@ -95,6 +98,7 @@ async function soumettre() {
       : await projetService.creer(payload)
 
     emit('saved', result)
+    showToast(isEdit.value ? 'Projet modifié avec succès.' : 'Projet créé avec succès.')
     emit('close')
   } catch (e) {
     errors.value.global = e.response?.data?.erreur ?? 'Une erreur est survenue'
