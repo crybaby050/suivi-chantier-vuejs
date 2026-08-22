@@ -2,15 +2,18 @@
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import AppLayout from '@/components/layout/AppLayout.vue'
+import ModalProjet from '@/components/projets/ModalProjet.vue'
 import projetService from '@/services/projetService'
 import { useRole } from '@/composables/useRole'
 
 const router = useRouter()
-const { isAdmin, isChef, canManage } = useRole()
+const { canManage } = useRole()
 
 const projets = ref([])
 const loading = ref(true)
 const filtre = ref('tous')
+const showModal = ref(false)
+const projetEdite = ref(null) // null = création, objet = modification
 
 const STATUTS = ['tous', 'Planifier', 'En cours', 'Suspendu', 'Terminer']
 
@@ -36,6 +39,23 @@ async function charger() {
   }
 }
 
+function ouvrirCreation() {
+  projetEdite.value = null
+  showModal.value = true
+}
+
+function ouvrirEdition(projet) {
+  projetEdite.value = projet
+  showModal.value = true
+}
+
+function onSaved(projet) {
+  const idx = projets.value.findIndex((p) => p.id === projet.id)
+  if (idx !== -1)
+    projets.value[idx] = projet // modification
+  else projets.value.unshift(projet) // création
+}
+
 onMounted(charger)
 </script>
 
@@ -50,6 +70,7 @@ onMounted(charger)
       <button
         v-if="canManage"
         class="flex items-center gap-2 rounded-xl bg-primary px-4 py-2.5 text-sm font-bold text-white shadow-soft transition hover:bg-primary/90"
+        @click="ouvrirCreation"
       >
         <i class="fa-solid fa-plus text-xs"></i>
         Nouveau projet
@@ -158,5 +179,11 @@ onMounted(charger)
         }}
       </p>
     </div>
+    <ModalProjet
+      v-if="showModal"
+      :projet="projetEdite"
+      @close="showModal = false"
+      @saved="onSaved"
+    />
   </AppLayout>
 </template>
