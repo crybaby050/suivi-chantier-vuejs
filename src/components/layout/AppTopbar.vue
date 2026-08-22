@@ -4,6 +4,7 @@ import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { useRole } from '@/composables/useRole'
 import { useSidebar } from '@/composables/useSidebar'
+import { onMounted, onUnmounted } from 'vue'
 
 defineProps({ title: { type: String, default: 'Dashboard' } })
 
@@ -44,10 +45,13 @@ function handleProfil() {
   router.push('/profil')
 }
 
-// Fermer dropdown si clic extérieur
 function onClickOutside(e) {
   if (!e.target.closest('#topbarAvatar')) closeDropdown()
 }
+
+onMounted(() => document.addEventListener('click', onClickOutside))
+onUnmounted(() => document.removeEventListener('click', onClickOutside))
+
 </script>
 
 <template>
@@ -56,7 +60,7 @@ function onClickOutside(e) {
     :class="collapsed ? 'left-16' : 'lg:left-64 left-0'"
     @click.self="closeDropdown"
   >
-    <div class="flex h-full items-center px-4 sm:px-6" v-click-outside="onClickOutside">
+    <div class="flex h-full items-center px-4 sm:px-6">
       <!-- Bouton menu mobile -->
       <button
         class="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl bg-white/10 text-white transition hover:bg-white/20 lg:hidden"

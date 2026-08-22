@@ -6,6 +6,17 @@ import projetService from '@/services/projetService'
 import phaseService from '@/services/phaseService'
 import tacheService from '@/services/tacheService'
 import { useRole } from '@/composables/useRole'
+import ModalProjet from '@/components/projets/ModalProjet.vue'
+import { useAuthStore } from '@/stores/auth'
+
+import { useToast } from '@/composables/useToast'
+
+const auth = useAuthStore()
+
+const { showToast } = useToast()
+const showModal = ref(false)
+const confirmDelete = ref(false)
+const loadingDelete = ref(false)
 
 const route = useRoute()
 const router = useRouter()
@@ -120,6 +131,29 @@ async function selectionnerPhase(phase) {
   }
 }
 
+function ouvrirEdition() {
+  showModal.value = true
+}
+
+function onSaved(projetModifie) {
+  projet.value = projetModifie
+  showToast('Projet modifié avec succès.')
+}
+
+async function supprimerProjet() {
+  loadingDelete.value = true
+  try {
+    await projetService.supprimer(projet.value.id)
+    showToast('Projet supprimé.')
+    router.push('/projets')
+  } catch (e) {
+    showToast('Erreur lors de la suppression.', 'error')
+  } finally {
+    loadingDelete.value = false
+    confirmDelete.value = false
+  }
+}
+
 onMounted(chargerProjet)
 </script>
 
@@ -184,6 +218,7 @@ onMounted(chargerProjet)
             <div v-if="canManage" class="flex gap-2 flex-shrink-0">
               <button
                 class="flex items-center gap-2 rounded-xl border border-bordure px-3 py-2 text-xs font-bold text-muted transition hover:bg-fond hover:text-primary"
+                @click="ouvrirEdition"
               >
                 <i class="fa-solid fa-pen text-[10px]"></i>
                 Modifier
@@ -191,6 +226,7 @@ onMounted(chargerProjet)
               <button
                 v-if="isAdmin"
                 class="flex items-center gap-2 rounded-xl border border-bloque/30 px-3 py-2 text-xs font-bold text-bloque transition hover:bg-bloque/10"
+                @click="confirmDelete = true"
               >
                 <i class="fa-solid fa-trash text-[10px]"></i>
                 Supprimer
@@ -387,5 +423,47 @@ onMounted(chargerProjet)
         </div>
       </div>
     </div>
+    <!-- Modal modification -->
+    <ModalProjet v-if="showModal" :projet="projet" @close="showModal = false" @saved="onSaved" />
+
+    <!-- Confirmation suppression -->
+    <Teleport to="body">
+      <div
+        v-if="confirmDelete"
+        class="fixed inset-0 z-50 flex items-center justify-center p-4"
+        @click.self="confirmDelete = false"
+      >
+        <div class="absolute inset-0 bg-texte/40 backdrop-blur-sm" @click="confirmDelete = false" />
+        <div
+          class="relative z-10 w-full max-w-sm rounded-2xl bg-carte border border-bordure shadow-2xl p-6"
+        >
+          <div class="mb-4 flex h-12 w-12 items-center justify-center rounded-2xl bg-bloque/10">
+            <i class="fa-solid fa-trash text-bloque"></i>
+          </div>
+          <h3 class="text-base font-black text-texte mb-1">Supprimer le projet</h3>
+          <p class="text-sm text-muted mb-5">
+            Cette action est irréversible. Toutes les phases, tâches et données liées seront
+            supprimées.
+          </p>
+          <div class="flex gap-3 justify-end">
+            <button
+              class="rounded-xl border border-bordure px-4 py-2 text-sm font-bold text-muted transition hover:bg-fond"
+              @click="confirmDelete = false"
+            >
+              Annuler
+            </button>
+            <button
+              class="flex items-center gap-2 rounded-xl bg-bloque px-4 py-2 text-sm font-bold text-white transition hover:bg-bloque/90 disabled:opacity-60"
+              :disabled="loadingDelete"
+              @click="supprimerProjet"
+            >
+              <i v-if="loadingDelete" class="fa-solid fa-spinner fa-spin text-xs"></i>
+              <i v-else class="fa-solid fa-trash text-xs"></i>
+              Supprimer
+            </button>
+          </div>
+        </div>
+      </div>
+    </Teleport>
   </AppLayout>
 </template>
