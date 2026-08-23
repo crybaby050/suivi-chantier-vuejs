@@ -44,12 +44,10 @@ async function chargerDonnees() {
         const tachesDuProjet = tachesParPhase.flat()
         toutesLesTaches.push(...tachesDuProjet)
 
-        const progression = tachesDuProjet.length
-          ? Math.round(
-              tachesDuProjet.reduce((s, t) => s + (t.progression || 0), 0) / tachesDuProjet.length,
-            )
+        const phasesTerminees = phases.filter((p) => p.statutPhase === 'Terminer').length
+        progressionParProjet.value[projet.id] = phases.length
+          ? Math.round((phasesTerminees / phases.length) * 100)
           : 0
-        progressionParProjet.value[projet.id] = progression
       }),
     )
     taches.value = toutesLesTaches

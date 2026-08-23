@@ -97,18 +97,15 @@ async function charger() {
 }
 
 async function calculerProgressions(listeProjets) {
-  await Promise.all(
-    listeProjets.map(async (projet) => {
-      const phases = await phaseService.listerParProjet(projet.id)
-      const tachesProm = phases.map((ph) => tacheService.listerParPhase(ph.id))
-      const toutesLesTaches = (await Promise.all(tachesProm)).flat()
-      progressions.value[projet.id] = toutesLesTaches.length
-        ? Math.round(
-            toutesLesTaches.reduce((s, t) => s + (t.progression || 0), 0) / toutesLesTaches.length,
-          )
-        : 0
-    }),
-  )
+  await Promise.all(listeProjets.map(async (projet) => {
+    const phases = await phaseService.listerParProjet(projet.id)
+    if (!phases.length) {
+      progressions.value[projet.id] = 0
+      return
+    }
+    const phasesTerminees = phases.filter(p => p.statutPhase === 'Terminer').length
+    progressions.value[projet.id] = Math.round((phasesTerminees / phases.length) * 100)
+  }))
 }
 
 // ─── Actions ─────────────────────────────────────────────────────────────────

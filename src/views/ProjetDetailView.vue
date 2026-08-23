@@ -1,44 +1,42 @@
 <script setup>
-import { ref, computed, onMounted, watch } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import AppLayout from '@/components/layout/AppLayout.vue'
 import projetService from '@/services/projetService'
 import phaseService from '@/services/phaseService'
 import tacheService from '@/services/tacheService'
 import { useRole } from '@/composables/useRole'
-import ModalProjet from '@/components/projets/ModalProjet.vue'
 import { useAuthStore } from '@/stores/auth'
-
+import { useToast } from '@/composables/useToast'
+import ModalProjet from '@/components/projets/ModalProjet.vue'
 import ModalPhase from '@/components/phases/ModalPhase.vue'
 import ModalTache from '@/components/taches/ModalTache.vue'
 
-import { useToast } from '@/composables/useToast'
-
-const auth = useAuthStore()
-
-const showModalPhase = ref(false)
-const phaseEditee = ref(null)
-const showModalTache = ref(false)
-const tacheEditee = ref(null)
-
-const { showToast } = useToast()
-const showModal = ref(false)
-const confirmDelete = ref(false)
-const loadingDelete = ref(false)
-
 const route = useRoute()
 const router = useRouter()
+const auth = useAuthStore()
 const { canManage, isAdmin } = useRole()
+const { showToast } = useToast()
 
+// ─── État ─────────────────────────────────────────────────────────────────────
 const projet = ref(null)
 const phases = ref([])
 const taches = ref([])
 const phaseActive = ref(null)
 const loadingProjet = ref(true)
 const loadingTaches = ref(false)
+const loadingDelete = ref(false)
 
-// ─── Statuts ─────────────────────────────────────────────────────────────────
+const showModal = ref(false)
+const confirmDelete = ref(false)
+const showModalPhase = ref(false)
+const phaseEditee = ref(null)
+const showModalTache = ref(false)
+const tacheEditee = ref(null)
 
+const progressionParPhase = ref({})
+
+// ─── Configs statuts ──────────────────────────────────────────────────────────
 const STATUT_PROJET = {
   Planifier: { label: 'Planifié', badge: 'bg-attente/10 text-attente', dot: 'bg-attente' },
   'En cours': { label: 'En cours', badge: 'bg-secondary/10 text-secondary', dot: 'bg-secondary' },
@@ -90,63 +88,27 @@ const COLONNES_KANBAN = [
   },
 ]
 
-// ─── Données calculées ────────────────────────────────────────────────────────
-
-const progressionPhase = computed(() => {
-  if (!taches.value.length) return 0
-  return Math.round(
-    taches.value.reduce((s, t) => s + (t.progression || 0), 0) / taches.value.length,
-  )
+const progressionProjet = computed(() => {
+  if (!phases.value.length) return 0
+  const terminees = phases.value.filter((p) => p.statutPhase === 'Terminer').length
+  return Math.round((terminees / phases.value.length) * 100)
 })
+
+// ─── Calculés ─────────────────────────────────────────────────────────────────
+// APRÈS
+function calcProgPhase(listeTaches) {
+  if (!listeTaches.length) return 0
+  const terminees = listeTaches.filter(t => t.statutTache === 'Terminer').length
+  return Math.round((terminees / listeTaches.length) * 100)
+}
+
+const progressionPhase = computed(() => calcProgPhase(taches.value))
 
 function tachesDeLaColonne(statut) {
   return taches.value.filter((t) => t.statutTache === statut)
 }
 
-function progressionProjet(toutesLesTaches) {
-  if (!toutesLesTaches.length) return 0
-  return Math.round(
-    toutesLesTaches.reduce((s, t) => s + (t.progression || 0), 0) / toutesLesTaches.length,
-  )
-}
-
-function ouvrirCreationPhase() {
-  phaseEditee.value = null
-  showModalPhase.value = true
-}
-
-function ouvrirEditionPhase(phase, e) {
-  e.stopPropagation()
-  phaseEditee.value = phase
-  showModalPhase.value = true
-}
-
-function onPhaseSaved(phase) {
-  const idx = phases.value.findIndex((p) => p.id === phase.id)
-  if (idx !== -1) phases.value[idx] = phase
-  else phases.value.push(phase)
-}
-
-function ouvrirCreationTache() {
-  if (!phaseActive.value) return
-  tacheEditee.value = null
-  showModalTache.value = true
-}
-
-function ouvrirEditionTache(tache, e) {
-  e.stopPropagation()
-  tacheEditee.value = tache
-  showModalTache.value = true
-}
-
-function onTacheSaved(tache) {
-  const idx = taches.value.findIndex((t) => t.id === tache.id)
-  if (idx !== -1) taches.value[idx] = tache
-  else taches.value.push(tache)
-}
-
 // ─── Chargement ───────────────────────────────────────────────────────────────
-
 async function chargerProjet() {
   loadingProjet.value = true
   try {
@@ -156,9 +118,14 @@ async function chargerProjet() {
     ])
     projet.value = p
     phases.value = ph
-    if (ph.length) {
-      await selectionnerPhase(ph[0])
-    }
+
+    // Calcul progression de toutes les phases en parallèle
+    await Promise.all(ph.map(async (phase) => {
+      const t = await tacheService.listerParPhase(phase.id)
+      progressionParPhase.value[phase.id] = calcProgPhase(t)
+    }))
+
+    if (ph.length) await selectionnerPhase(ph[0])
   } finally {
     loadingProjet.value = false
   }
@@ -169,11 +136,13 @@ async function selectionnerPhase(phase) {
   loadingTaches.value = true
   try {
     taches.value = await tacheService.listerParPhase(phase.id)
+    progressionParPhase.value[phase.id] = calcProgPhase(taches.value)
   } finally {
     loadingTaches.value = false
   }
 }
 
+// ─── Actions projet ───────────────────────────────────────────────────────────
 function ouvrirEdition() {
   showModal.value = true
 }
@@ -197,34 +166,44 @@ async function supprimerProjet() {
   }
 }
 
-const progressionParPhase = ref({})
-
-// Dans selectionnerPhase(), après avoir chargé les tâches :
-async function selectionnerPhase(phase) {
-  phaseActive.value = phase
-  loadingTaches.value = true
-  try {
-    taches.value = await tacheService.listerParPhase(phase.id)
-    // Calcul progression phase
-    progressionParPhase.value[phase.id] = taches.value.length
-      ? Math.round(taches.value.reduce((s, t) => s + (t.progression || 0), 0) / taches.value.length)
-      : 0
-  } finally {
-    loadingTaches.value = false
-  }
+// ─── Actions phase ────────────────────────────────────────────────────────────
+function ouvrirCreationPhase() {
+  phaseEditee.value = null
+  showModalPhase.value = true
 }
 
-// Dans onTacheSaved(), recalcule après sauvegarde :
+function ouvrirEditionPhase(phase, e) {
+  e.stopPropagation()
+  phaseEditee.value = phase
+  showModalPhase.value = true
+}
+
+function onPhaseSaved(phase) {
+  const idx = phases.value.findIndex((p) => p.id === phase.id)
+  if (idx !== -1) phases.value[idx] = phase
+  else phases.value.push(phase)
+}
+
+// ─── Actions tâche ────────────────────────────────────────────────────────────
+function ouvrirCreationTache() {
+  if (!phaseActive.value) return
+  tacheEditee.value = null
+  showModalTache.value = true
+}
+
+function ouvrirEditionTache(tache, e) {
+  e.stopPropagation()
+  tacheEditee.value = tache
+  showModalTache.value = true
+}
+
 function onTacheSaved(tache) {
   const idx = taches.value.findIndex((t) => t.id === tache.id)
   if (idx !== -1) taches.value[idx] = tache
   else taches.value.push(tache)
 
-  // Recalcul
   if (phaseActive.value) {
-    progressionParPhase.value[phaseActive.value.id] = taches.value.length
-      ? Math.round(taches.value.reduce((s, t) => s + (t.progression || 0), 0) / taches.value.length)
-      : 0
+    progressionParPhase.value[phaseActive.value.id] = calcProgPhase(taches.value)
   }
 }
 
@@ -286,6 +265,23 @@ onMounted(chargerProjet)
               <p v-if="projet.description" class="mt-3 text-sm text-muted">
                 {{ projet.description }}
               </p>
+              <div class="mt-3">
+                <div class="flex items-center justify-between mb-1">
+                  <span class="text-xs text-muted">Progression globale</span>
+                  <span class="text-xs font-black text-primary">{{ progressionProjet }}%</span>
+                </div>
+                <div class="h-1.5 w-full rounded-full bg-fond overflow-hidden">
+                  <div
+                    class="h-1.5 rounded-full transition-all duration-700"
+                    :class="STATUT_PROJET[projet.statutProjet]?.dot ?? 'bg-primary'"
+                    :style="{ width: `${progressionProjet}%` }"
+                  ></div>
+                </div>
+                <p class="text-[11px] text-muted mt-1">
+                  {{ phases.filter((p) => p.statutPhase === 'Terminer').length }} /
+                  {{ phases.length }} phase(s) terminée(s)
+                </p>
+              </div>
             </div>
 
             <!-- Actions projet -->
