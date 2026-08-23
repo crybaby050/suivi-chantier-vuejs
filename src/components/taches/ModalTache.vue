@@ -1,9 +1,10 @@
 <script setup>
-import { ref, computed, watch } from 'vue'
+import { ref, computed, watch, onMounted } from 'vue'
 import AppModal from '@/components/ui/AppModal.vue'
 import AppInput from '@/components/ui/AppInput.vue'
 import AppSelect from '@/components/ui/AppSelect.vue'
 import tacheService from '@/services/tacheService'
+import utilisateurService from '@/services/utilisateurService'
 import { useToast } from '@/composables/useToast'
 
 const props = defineProps({
@@ -15,25 +16,28 @@ const { showToast } = useToast()
 
 const loading = ref(false)
 const errors = ref({})
-
-const form = ref({
-  titre: '',
-  description: '',
-  dateDeDebut: '',
-  dateDeFin: '',
-  progression: 0,
-  statutTache: 'A faire',
-})
+const ouvriers = ref([])
+const loadingOuvriers = ref(false)
 
 const isEdit = computed(() => !!props.tache)
 
-const STATUTS = [
+const STATUTS_EDIT = [
   { value: 'A faire', label: 'À faire' },
   { value: 'En cours', label: 'En cours' },
   { value: 'Terminer', label: 'Terminé' },
   { value: 'Valider', label: 'À valider' },
   { value: 'Renvoyer', label: 'Renvoyé' },
 ]
+
+const form = ref({
+  titre: '',
+  description: '',
+  dateDeDebut: '',
+  dateDeFin: '',
+  utilisateurId: '',
+  statutTache: 'A faire',
+  progression: 0,
+})
 
 watch(
   () => props.tache,
@@ -44,16 +48,32 @@ watch(
       description: t.description ?? '',
       dateDeDebut: t.dateDeDebut?.slice(0, 10) ?? '',
       dateDeFin: t.dateDeFin?.slice(0, 10) ?? '',
-      progression: t.progression ?? 0,
+      utilisateurId: '',
       statutTache: t.statutTache ?? 'A faire',
+      progression: t.progression ?? 0,
     }
   },
   { immediate: true },
 )
 
+onMounted(async () => {
+  loadingOuvriers.value = true
+  try {
+    const liste = await utilisateurService.ouvriersDisponibles()
+    ouvriers.value = liste.map((u) => ({
+      value: u.id,
+      label: `${u.nom} — ${u.statutDisponibilite}`,
+    }))
+  } finally {
+    loadingOuvriers.value = false
+  }
+})
+
 function valider() {
   errors.value = {}
   if (!form.value.titre.trim()) errors.value.titre = 'Le titre est requis'
+  if (!isEdit.value && !form.value.utilisateurId)
+    errors.value.utilisateurId = 'Assigner un ouvrier est obligatoire'
   return Object.keys(errors.value).length === 0
 }
 
@@ -61,19 +81,33 @@ async function soumettre() {
   if (!valider()) return
   loading.value = true
   try {
-    const payload = {
-      titre: form.value.titre.trim(),
-      description: form.value.description.trim() || undefined,
-      dateDeDebut: form.value.dateDeDebut || undefined,
-      dateDeFin: form.value.dateDeFin || undefined,
-      progression: Number(form.value.progression),
-      statutTache: form.value.statutTache,
-    }
+    const payload = isEdit.value
+      ? {
+          titre: form.value.titre.trim(),
+          description: form.value.description.trim() || undefined,
+          dateDeDebut: form.value.dateDeDebut || undefined,
+          dateDeFin: form.value.dateDeFin || undefined,
+          statutTache: form.value.statutTache,
+          progression: Number(form.value.progression),
+        }
+      : {
+          titre: form.value.titre.trim(),
+          description: form.value.description.trim() || undefined,
+          dateDeDebut: form.value.dateDeDebut || undefined,
+          dateDeFin: form.value.dateDeFin || undefined,
+          utilisateurId: Number(form.value.utilisateurId),
+        }
+
     const result = isEdit.value
       ? await tacheService.modifier(props.tache.id, payload)
       : await tacheService.creer(props.phaseId, payload)
 
-    showToast(isEdit.value ? 'Tâche modifiée.' : 'Tâche créée.')
+    // Si création, créer aussi l'affectation
+    if (!isEdit.value) {
+      await tacheService.affecter(result.id, { utilisateurId: Number(form.value.utilisateurId) })
+    }
+
+    showToast(isEdit.value ? 'Tâche modifiée.' : 'Tâche créée et assignée.')
     emit('saved', result)
     emit('close')
   } catch (e) {
@@ -117,8 +151,33 @@ async function soumettre() {
         <AppInput v-model="form.dateDeFin" label="Date de fin" type="date" />
       </div>
 
-      <div class="grid grid-cols-2 gap-3">
-        <AppSelect v-model="form.statutTache" label="Statut" :options="STATUTS" />
+      <!-- Assignation ouvrier — création uniquement -->
+      <div v-if="!isEdit">
+        <AppSelect
+          v-model="form.utilisateurId"
+          label="Assigner à un ouvrier"
+          :options="ouvriers"
+          :placeholder="loadingOuvriers ? 'Chargement...' : 'Sélectionner un ouvrier disponible'"
+          :error="errors.utilisateurId"
+          required
+        />
+        <p
+          v-if="!loadingOuvriers && !ouvriers.length"
+          class="mt-1 text-xs text-attente flex items-center gap-1"
+        >
+          <i class="fa-solid fa-triangle-exclamation text-[10px]"></i>
+          Aucun ouvrier disponible pour le moment.
+        </p>
+        <div class="mt-2 rounded-xl bg-fond px-4 py-3 text-xs text-muted flex items-center gap-2">
+          <i class="fa-solid fa-info-circle text-primary"></i>
+          Le statut initial sera <strong class="text-texte">À faire</strong>. La progression sera
+          mise à jour par l'ouvrier.
+        </div>
+      </div>
+
+      <!-- Statut + progression — édition uniquement -->
+      <template v-if="isEdit">
+        <AppSelect v-model="form.statutTache" label="Statut" :options="STATUTS_EDIT" />
         <div class="flex flex-col gap-1.5">
           <label class="text-xs font-bold text-texte">
             Progression <span class="text-primary font-black">{{ form.progression }}%</span>
@@ -129,10 +188,10 @@ async function soumettre() {
             min="0"
             max="100"
             step="5"
-            class="w-full accent-primary mt-2"
+            class="w-full accent-primary mt-1"
           />
         </div>
-      </div>
+      </template>
     </div>
 
     <template #footer>
@@ -150,7 +209,7 @@ async function soumettre() {
         >
           <i v-if="loading" class="fa-solid fa-spinner fa-spin text-xs"></i>
           <i v-else class="fa-solid fa-check text-xs"></i>
-          {{ isEdit ? 'Enregistrer' : 'Créer la tâche' }}
+          {{ isEdit ? 'Enregistrer' : 'Créer et assigner' }}
         </button>
       </div>
     </template>

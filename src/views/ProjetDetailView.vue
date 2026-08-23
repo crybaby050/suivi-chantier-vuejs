@@ -9,9 +9,17 @@ import { useRole } from '@/composables/useRole'
 import ModalProjet from '@/components/projets/ModalProjet.vue'
 import { useAuthStore } from '@/stores/auth'
 
+import ModalPhase from '@/components/phases/ModalPhase.vue'
+import ModalTache from '@/components/taches/ModalTache.vue'
+
 import { useToast } from '@/composables/useToast'
 
 const auth = useAuthStore()
+
+const showModalPhase = ref(false)
+const phaseEditee = ref(null)
+const showModalTache = ref(false)
+const tacheEditee = ref(null)
 
 const { showToast } = useToast()
 const showModal = ref(false)
@@ -102,6 +110,41 @@ function progressionProjet(toutesLesTaches) {
   )
 }
 
+function ouvrirCreationPhase() {
+  phaseEditee.value = null
+  showModalPhase.value = true
+}
+
+function ouvrirEditionPhase(phase, e) {
+  e.stopPropagation()
+  phaseEditee.value = phase
+  showModalPhase.value = true
+}
+
+function onPhaseSaved(phase) {
+  const idx = phases.value.findIndex((p) => p.id === phase.id)
+  if (idx !== -1) phases.value[idx] = phase
+  else phases.value.push(phase)
+}
+
+function ouvrirCreationTache() {
+  if (!phaseActive.value) return
+  tacheEditee.value = null
+  showModalTache.value = true
+}
+
+function ouvrirEditionTache(tache, e) {
+  e.stopPropagation()
+  tacheEditee.value = tache
+  showModalTache.value = true
+}
+
+function onTacheSaved(tache) {
+  const idx = taches.value.findIndex((t) => t.id === tache.id)
+  if (idx !== -1) taches.value[idx] = tache
+  else taches.value.push(tache)
+}
+
 // ─── Chargement ───────────────────────────────────────────────────────────────
 
 async function chargerProjet() {
@@ -151,6 +194,37 @@ async function supprimerProjet() {
   } finally {
     loadingDelete.value = false
     confirmDelete.value = false
+  }
+}
+
+const progressionParPhase = ref({})
+
+// Dans selectionnerPhase(), après avoir chargé les tâches :
+async function selectionnerPhase(phase) {
+  phaseActive.value = phase
+  loadingTaches.value = true
+  try {
+    taches.value = await tacheService.listerParPhase(phase.id)
+    // Calcul progression phase
+    progressionParPhase.value[phase.id] = taches.value.length
+      ? Math.round(taches.value.reduce((s, t) => s + (t.progression || 0), 0) / taches.value.length)
+      : 0
+  } finally {
+    loadingTaches.value = false
+  }
+}
+
+// Dans onTacheSaved(), recalcule après sauvegarde :
+function onTacheSaved(tache) {
+  const idx = taches.value.findIndex((t) => t.id === tache.id)
+  if (idx !== -1) taches.value[idx] = tache
+  else taches.value.push(tache)
+
+  // Recalcul
+  if (phaseActive.value) {
+    progressionParPhase.value[phaseActive.value.id] = taches.value.length
+      ? Math.round(taches.value.reduce((s, t) => s + (t.progression || 0), 0) / taches.value.length)
+      : 0
   }
 }
 
@@ -214,7 +288,7 @@ onMounted(chargerProjet)
               </p>
             </div>
 
-            <!-- Actions -->
+            <!-- Actions projet -->
             <div v-if="canManage" class="flex gap-2 flex-shrink-0">
               <button
                 class="flex items-center gap-2 rounded-xl border border-bordure px-3 py-2 text-xs font-bold text-muted transition hover:bg-fond hover:text-primary"
@@ -248,6 +322,7 @@ onMounted(chargerProjet)
               v-if="canManage"
               class="flex h-6 w-6 items-center justify-center rounded-lg bg-primary/10 text-primary transition hover:bg-primary hover:text-white"
               title="Ajouter une phase"
+              @click="ouvrirCreationPhase"
             >
               <i class="fa-solid fa-plus text-[10px]"></i>
             </button>
@@ -281,13 +356,22 @@ onMounted(chargerProjet)
                 >
                   {{ phase.libelle }}
                 </span>
-                <i
-                  class="fa-solid flex-shrink-0 text-[10px]"
-                  :class="[
-                    STATUT_PHASE[phase.statutPhase]?.icon ?? 'fa-circle',
-                    phaseActive?.id === phase.id ? 'text-primary' : 'text-muted',
-                  ]"
-                ></i>
+                <div class="flex items-center gap-1 flex-shrink-0">
+                  <button
+                    v-if="canManage"
+                    class="opacity-0 group-hover:opacity-100 transition flex h-5 w-5 items-center justify-center rounded text-muted hover:text-primary"
+                    @click.stop="ouvrirEditionPhase(phase, $event)"
+                  >
+                    <i class="fa-solid fa-pen text-[9px]"></i>
+                  </button>
+                  <i
+                    class="fa-solid text-[10px]"
+                    :class="[
+                      STATUT_PHASE[phase.statutPhase]?.icon ?? 'fa-circle',
+                      phaseActive?.id === phase.id ? 'text-primary' : 'text-muted',
+                    ]"
+                  ></i>
+                </div>
               </div>
 
               <!-- Mini progress bar -->
@@ -295,7 +379,7 @@ onMounted(chargerProjet)
                 <div
                   class="h-1 rounded-full transition-all duration-500"
                   :class="phaseActive?.id === phase.id ? 'bg-primary' : 'bg-bordure'"
-                  style="width: 0%"
+                  :style="{ width: `${progressionParPhase[phase.id] ?? 0}%` }"
                 ></div>
               </div>
 
@@ -330,6 +414,7 @@ onMounted(chargerProjet)
             <button
               v-if="phaseActive && canManage"
               class="flex items-center gap-2 rounded-xl bg-primary/10 px-3 py-1.5 text-xs font-bold text-primary transition hover:bg-primary hover:text-white"
+              @click="ouvrirCreationTache"
             >
               <i class="fa-solid fa-plus text-[10px]"></i>
               Ajouter une tâche
@@ -375,6 +460,7 @@ onMounted(chargerProjet)
                   v-for="tache in tachesDeLaColonne(col.statut)"
                   :key="tache.id"
                   class="group rounded-xl bg-carte border border-bordure p-3 shadow-card transition-all hover:shadow-soft hover:-translate-y-0.5 cursor-pointer"
+                  @click="ouvrirEditionTache(tache, $event)"
                 >
                   <p class="text-xs font-bold text-texte line-clamp-2 mb-2">{{ tache.titre }}</p>
 
@@ -395,7 +481,7 @@ onMounted(chargerProjet)
                     </div>
                   </div>
 
-                  <!-- Footer carte -->
+                  <!-- Footer carte tâche -->
                   <div class="flex items-center justify-between">
                     <span v-if="tache.dateDeFin" class="text-[10px] text-muted">
                       <i class="fa-solid fa-flag-checkered mr-0.5"></i>
@@ -423,10 +509,30 @@ onMounted(chargerProjet)
         </div>
       </div>
     </div>
-    <!-- Modal modification -->
+
+    <!-- Modal modification projet -->
     <ModalProjet v-if="showModal" :projet="projet" @close="showModal = false" @saved="onSaved" />
 
-    <!-- Confirmation suppression -->
+    <!-- Modal phase -->
+    <ModalPhase
+      v-if="showModalPhase"
+      :phase="phaseEditee"
+      :projet-id="Number(route.params.id)"
+      :nombre-phases="phases.length"
+      @close="showModalPhase = false"
+      @saved="onPhaseSaved"
+    />
+
+    <!-- Modal tâche -->
+    <ModalTache
+      v-if="showModalTache"
+      :tache="tacheEditee"
+      :phase-id="phaseActive?.id"
+      @close="showModalTache = false"
+      @saved="onTacheSaved"
+    />
+
+    <!-- Confirmation suppression projet -->
     <Teleport to="body">
       <div
         v-if="confirmDelete"

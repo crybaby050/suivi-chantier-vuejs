@@ -1,5 +1,5 @@
 <script setup>
-import { ref, watch } from 'vue'
+import { ref, computed, watch } from 'vue'
 import AppModal from '@/components/ui/AppModal.vue'
 import AppInput from '@/components/ui/AppInput.vue'
 import AppSelect from '@/components/ui/AppSelect.vue'
@@ -9,6 +9,7 @@ import { useToast } from '@/composables/useToast'
 const props = defineProps({
   phase: { type: Object, default: null },
   projetId: { type: Number, required: true },
+  nombrePhases: { type: Number, default: 0 }, // pour l'ordre auto
 })
 const emit = defineEmits(['close', 'saved'])
 const { showToast } = useToast()
@@ -16,17 +17,7 @@ const { showToast } = useToast()
 const loading = ref(false)
 const errors = ref({})
 
-const form = ref({
-  libelle: '',
-  ordre: 1,
-  dateDeDebut: '',
-  dateDeFinPrevue: '',
-  statutPhase: 'En attente',
-})
-
 const isEdit = computed(() => !!props.phase)
-
-import { computed } from 'vue'
 
 const STATUTS = [
   { value: 'En attente', label: 'En attente' },
@@ -34,13 +25,19 @@ const STATUTS = [
   { value: 'Terminer', label: 'Terminé' },
 ]
 
+const form = ref({
+  libelle: '',
+  dateDeDebut: '',
+  dateDeFinPrevue: '',
+  statutPhase: 'En attente',
+})
+
 watch(
   () => props.phase,
   (p) => {
     if (!p) return
     form.value = {
       libelle: p.libelle ?? '',
-      ordre: p.ordre ?? 1,
       dateDeDebut: p.dateDeDebut?.slice(0, 10) ?? '',
       dateDeFinPrevue: p.dateDeFinPrevue?.slice(0, 10) ?? '',
       statutPhase: p.statutPhase ?? 'En attente',
@@ -52,7 +49,6 @@ watch(
 function valider() {
   errors.value = {}
   if (!form.value.libelle.trim()) errors.value.libelle = 'Le libellé est requis'
-  if (!form.value.ordre) errors.value.ordre = "L'ordre est requis"
   return Object.keys(errors.value).length === 0
 }
 
@@ -62,10 +58,10 @@ async function soumettre() {
   try {
     const payload = {
       libelle: form.value.libelle.trim(),
-      ordre: Number(form.value.ordre),
+      ordre: isEdit.value ? props.phase.ordre : props.nombrePhases + 1,
       dateDeDebut: form.value.dateDeDebut || undefined,
       dateDeFinPrevue: form.value.dateDeFinPrevue || undefined,
-      statutPhase: form.value.statutPhase,
+      statutPhase: isEdit.value ? form.value.statutPhase : 'En attente',
     }
     const result = isEdit.value
       ? await phaseService.modifier(props.phase.id, payload)
@@ -100,16 +96,18 @@ async function soumettre() {
         required
       />
 
-      <div class="grid grid-cols-2 gap-3">
-        <AppInput
-          v-model="form.ordre"
-          label="Ordre"
-          type="number"
-          placeholder="1"
-          :error="errors.ordre"
-          required
-        />
-        <AppSelect v-model="form.statutPhase" label="Statut" :options="STATUTS" />
+      <!-- Statut visible uniquement en mode édition -->
+      <AppSelect v-if="isEdit" v-model="form.statutPhase" label="Statut" :options="STATUTS" />
+
+      <!-- Info ordre en création -->
+      <div
+        v-if="!isEdit"
+        class="rounded-xl bg-fond px-4 py-3 text-xs text-muted flex items-center gap-2"
+      >
+        <i class="fa-solid fa-info-circle text-primary"></i>
+        Cette phase sera ajoutée en position
+        <strong class="text-texte">{{ nombrePhases + 1 }}</strong> avec le statut
+        <strong class="text-texte">En attente</strong>.
       </div>
 
       <div class="grid grid-cols-2 gap-3">
