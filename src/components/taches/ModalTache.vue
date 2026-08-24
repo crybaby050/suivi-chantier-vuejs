@@ -34,7 +34,7 @@ const form = ref({
   description: '',
   dateDeDebut: '',
   dateDeFin: '',
-  utilisateurId: '',
+  utilisateurIds: [],
   statutTache: 'A faire',
   progression: 0,
 })
@@ -72,8 +72,8 @@ onMounted(async () => {
 function valider() {
   errors.value = {}
   if (!form.value.titre.trim()) errors.value.titre = 'Le titre est requis'
-  if (!isEdit.value && !form.value.utilisateurId)
-    errors.value.utilisateurId = 'Assigner un ouvrier est obligatoire'
+  if (!isEdit.value && !form.value.utilisateurIds.length)
+    errors.value.utilisateurIds = 'Assigner au moins un ouvrier est obligatoire'
   return Object.keys(errors.value).length === 0
 }
 
@@ -102,9 +102,12 @@ async function soumettre() {
       ? await tacheService.modifier(props.tache.id, payload)
       : await tacheService.creer(props.phaseId, payload)
 
-    // Si création, créer aussi l'affectation
     if (!isEdit.value) {
-      await tacheService.affecter(result.id, { utilisateurId: Number(form.value.utilisateurId) })
+      await Promise.all(
+        form.value.utilisateurIds.map((id) =>
+          tacheService.affecter(result.id, { utilisateurId: Number(id) }),
+        ),
+      )
     }
 
     showToast(isEdit.value ? 'Tâche modifiée.' : 'Tâche créée et assignée.')
@@ -151,27 +154,52 @@ async function soumettre() {
         <AppInput v-model="form.dateDeFin" label="Date de fin" type="date" />
       </div>
 
-      <!-- Assignation ouvrier — création uniquement -->
+      <!-- Assignation ouvriers — création uniquement -->
       <div v-if="!isEdit">
-        <AppSelect
-          v-model="form.utilisateurId"
-          label="Assigner à un ouvrier"
-          :options="ouvriers"
-          :placeholder="loadingOuvriers ? 'Chargement...' : 'Sélectionner un ouvrier disponible'"
-          :error="errors.utilisateurId"
-          required
-        />
-        <p
-          v-if="!loadingOuvriers && !ouvriers.length"
-          class="mt-1 text-xs text-attente flex items-center gap-1"
+        <label class="text-xs font-bold text-texte mb-2 block">
+          Assigner à des ouvriers <span class="text-bloque">*</span>
+        </label>
+
+        <div v-if="loadingOuvriers" class="text-xs text-muted">
+          <i class="fa-solid fa-spinner fa-spin mr-1"></i> Chargement...
+        </div>
+
+        <div
+          v-else-if="!ouvriers.length"
+          class="rounded-xl bg-attente/10 px-4 py-3 text-xs text-attente flex items-center gap-2"
         >
-          <i class="fa-solid fa-triangle-exclamation text-[10px]"></i>
+          <i class="fa-solid fa-triangle-exclamation"></i>
           Aucun ouvrier disponible pour le moment.
+        </div>
+
+        <div
+          v-else
+          class="space-y-2 max-h-40 overflow-y-auto rounded-xl border border-bordure bg-fond p-3"
+        >
+          <label
+            v-for="ouvrier in ouvriers"
+            :key="ouvrier.value"
+            class="flex items-center gap-3 rounded-lg px-2 py-1.5 cursor-pointer hover:bg-white transition"
+          >
+            <input
+              type="checkbox"
+              :value="ouvrier.value"
+              v-model="form.utilisateurIds"
+              class="accent-primary w-4 h-4 flex-shrink-0"
+            />
+            <span class="text-sm text-texte font-medium">{{ ouvrier.label }}</span>
+          </label>
+        </div>
+
+        <p v-if="errors.utilisateurIds" class="mt-1 text-xs text-bloque flex items-center gap-1">
+          <i class="fa-solid fa-circle-exclamation text-[10px]"></i>
+          {{ errors.utilisateurIds }}
         </p>
+
         <div class="mt-2 rounded-xl bg-fond px-4 py-3 text-xs text-muted flex items-center gap-2">
           <i class="fa-solid fa-info-circle text-primary"></i>
-          Le statut initial sera <strong class="text-texte">À faire</strong>. La progression sera
-          mise à jour par l'ouvrier.
+          {{ form.utilisateurIds.length }} ouvrier(s) sélectionné(s) · Statut initial :
+          <strong class="text-texte ml-1">À faire</strong>
         </div>
       </div>
 
