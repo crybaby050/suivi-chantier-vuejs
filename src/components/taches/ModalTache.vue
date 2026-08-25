@@ -6,6 +6,7 @@ import AppSelect from '@/components/ui/AppSelect.vue'
 import tacheService from '@/services/tacheService'
 import utilisateurService from '@/services/utilisateurService'
 import { useToast } from '@/composables/useToast'
+import AppMultiSelect from '@/components/ui/AppMultiSelect.vue'
 
 const props = defineProps({
   tache: { type: Object, default: null },
@@ -156,50 +157,18 @@ async function soumettre() {
 
       <!-- Assignation ouvriers — création uniquement -->
       <div v-if="!isEdit">
-        <label class="text-xs font-bold text-texte mb-2 block">
-          Assigner à des ouvriers <span class="text-bloque">*</span>
-        </label>
-
-        <div v-if="loadingOuvriers" class="text-xs text-muted">
-          <i class="fa-solid fa-spinner fa-spin mr-1"></i> Chargement...
-        </div>
-
-        <div
-          v-else-if="!ouvriers.length"
-          class="rounded-xl bg-attente/10 px-4 py-3 text-xs text-attente flex items-center gap-2"
-        >
-          <i class="fa-solid fa-triangle-exclamation"></i>
-          Aucun ouvrier disponible pour le moment.
-        </div>
-
-        <div
-          v-else
-          class="space-y-2 max-h-40 overflow-y-auto rounded-xl border border-bordure bg-fond p-3"
-        >
-          <label
-            v-for="ouvrier in ouvriers"
-            :key="ouvrier.value"
-            class="flex items-center gap-3 rounded-lg px-2 py-1.5 cursor-pointer hover:bg-white transition"
-          >
-            <input
-              type="checkbox"
-              :value="ouvrier.value"
-              v-model="form.utilisateurIds"
-              class="accent-primary w-4 h-4 flex-shrink-0"
-            />
-            <span class="text-sm text-texte font-medium">{{ ouvrier.label }}</span>
-          </label>
-        </div>
-
-        <p v-if="errors.utilisateurIds" class="mt-1 text-xs text-bloque flex items-center gap-1">
-          <i class="fa-solid fa-circle-exclamation text-[10px]"></i>
-          {{ errors.utilisateurIds }}
-        </p>
-
+        <AppMultiSelect
+          v-model="form.utilisateurIds"
+          label="Assigner à des ouvriers"
+          :options="ouvriers"
+          placeholder="Rechercher un ouvrier..."
+          :error="errors.utilisateurIds"
+          required
+        />
         <div class="mt-2 rounded-xl bg-fond px-4 py-3 text-xs text-muted flex items-center gap-2">
           <i class="fa-solid fa-info-circle text-primary"></i>
-          {{ form.utilisateurIds.length }} ouvrier(s) sélectionné(s) · Statut initial :
-          <strong class="text-texte ml-1">À faire</strong>
+          Statut initial : <strong class="text-texte ml-1">À faire</strong>. La progression sera
+          mise à jour par les ouvriers.
         </div>
       </div>
 
