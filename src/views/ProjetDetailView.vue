@@ -11,6 +11,8 @@ import { useToast } from '@/composables/useToast'
 import ModalProjet from '@/components/projets/ModalProjet.vue'
 import ModalPhase from '@/components/phases/ModalPhase.vue'
 import ModalTache from '@/components/taches/ModalTache.vue'
+import ModalDetailTache from '@/components/taches/ModalDetailTache.vue'
+import affectationService from '@/services/affectationService'
 
 const route = useRoute()
 const router = useRouter()
@@ -34,7 +36,11 @@ const phaseEditee = ref(null)
 const showModalTache = ref(false)
 const tacheEditee = ref(null)
 
+const showModalDetailTache = ref(false)
+const tacheDetail = ref(null)
+
 const progressionParPhase = ref({})
+const confirmDeletePhase = ref(null)
 
 // ─── Configs statuts ──────────────────────────────────────────────────────────
 const STATUT_PROJET = {
@@ -98,7 +104,7 @@ const progressionProjet = computed(() => {
 // APRÈS
 function calcProgPhase(listeTaches) {
   if (!listeTaches.length) return 0
-  const terminees = listeTaches.filter(t => t.statutTache === 'Terminer').length
+  const terminees = listeTaches.filter((t) => t.statutTache === 'Terminer').length
   return Math.round((terminees / listeTaches.length) * 100)
 }
 
@@ -120,10 +126,12 @@ async function chargerProjet() {
     phases.value = ph
 
     // Calcul progression de toutes les phases en parallèle
-    await Promise.all(ph.map(async (phase) => {
-      const t = await tacheService.listerParPhase(phase.id)
-      progressionParPhase.value[phase.id] = calcProgPhase(t)
-    }))
+    await Promise.all(
+      ph.map(async (phase) => {
+        const t = await tacheService.listerParPhase(phase.id)
+        progressionParPhase.value[phase.id] = calcProgPhase(t)
+      }),
+    )
 
     if (ph.length) await selectionnerPhase(ph[0])
   } finally {
@@ -135,7 +143,13 @@ async function selectionnerPhase(phase) {
   phaseActive.value = phase
   loadingTaches.value = true
   try {
-    taches.value = await tacheService.listerParPhase(phase.id)
+    const liste = await tacheService.listerParPhase(phase.id)
+    taches.value = await Promise.all(
+      liste.map(async (t) => {
+        const affs = await affectationService.listerParTache(t.id)
+        return { ...t, progressionCalculee: calcProgressionMoyenne(affs) }
+      })
+    )
     progressionParPhase.value[phase.id] = calcProgPhase(taches.value)
   } finally {
     loadingTaches.value = false
@@ -166,6 +180,12 @@ async function supprimerProjet() {
   }
 }
 
+function calcProgressionMoyenne(affs) {
+  if (!affs.length) return 0
+  const total = affs.reduce((s, a) => s + (a.progression ?? 0), 0)
+  return Math.round(total / affs.length)
+}
+
 // ─── Actions phase ────────────────────────────────────────────────────────────
 function ouvrirCreationPhase() {
   phaseEditee.value = null
@@ -191,10 +211,18 @@ function ouvrirCreationTache() {
   showModalTache.value = true
 }
 
-function ouvrirEditionTache(tache, e) {
+function ouvrirDetailTache(tache, e) {
   e.stopPropagation()
-  tacheEditee.value = tache
-  showModalTache.value = true
+  tacheDetail.value = tache
+  showModalDetailTache.value = true
+}
+
+function onTacheDeleted(tacheId) {
+  taches.value = taches.value.filter((t) => t.id !== tacheId)
+  if (phaseActive.value) {
+    progressionParPhase.value[phaseActive.value.id] = calcProgPhase(taches.value)
+  }
+  showModalDetailTache.value = false
 }
 
 function onTacheSaved(tache) {
@@ -204,6 +232,29 @@ function onTacheSaved(tache) {
 
   if (phaseActive.value) {
     progressionParPhase.value[phaseActive.value.id] = calcProgPhase(taches.value)
+  }
+}
+
+function demanderSuppressionPhase(phase, e) {
+  e.stopPropagation()
+  confirmDeletePhase.value = phase
+}
+
+async function supprimerPhaseConfirmee() {
+  if (!confirmDeletePhase.value) return
+  try {
+    await phaseService.supprimer(confirmDeletePhase.value.id)
+    phases.value = phases.value.filter((p) => p.id !== confirmDeletePhase.value.id)
+    if (phaseActive.value?.id === confirmDeletePhase.value.id) {
+      phaseActive.value = phases.value[0] ?? null
+      if (phaseActive.value) await selectionnerPhase(phaseActive.value)
+      else taches.value = []
+    }
+    showToast('Phase supprimée.')
+  } catch (e) {
+    showToast('Erreur lors de la suppression de la phase.', 'error')
+  } finally {
+    confirmDeletePhase.value = null
   }
 }
 
@@ -333,16 +384,19 @@ onMounted(chargerProjet)
           </div>
 
           <!-- Liste des phases -->
-          <button
+          <div
             v-for="phase in phases"
             :key="phase.id"
-            class="group w-full text-left rounded-xl border transition-all duration-150 overflow-hidden"
+            role="button"
+            tabindex="0"
+            class="group w-full text-left rounded-xl border transition-all duration-150 overflow-hidden cursor-pointer"
             :class="
               phaseActive?.id === phase.id
                 ? 'border-primary/30 bg-primary/5 shadow-soft'
                 : 'border-bordure bg-carte hover:border-primary/20 hover:bg-fond'
             "
             @click="selectionnerPhase(phase)"
+            @keydown.enter="selectionnerPhase(phase)"
           >
             <div class="p-3">
               <div class="flex items-center justify-between gap-2 mb-1.5">
@@ -360,6 +414,13 @@ onMounted(chargerProjet)
                   >
                     <i class="fa-solid fa-pen text-[9px]"></i>
                   </button>
+                  <button
+                    v-if="isAdmin"
+                    class="opacity-0 group-hover:opacity-100 transition flex h-5 w-5 items-center justify-center rounded text-muted hover:text-bloque"
+                    @click.stop="demanderSuppressionPhase(phase, $event)"
+                  >
+                    <i class="fa-solid fa-trash text-[9px]"></i>
+                  </button>
                   <i
                     class="fa-solid text-[10px]"
                     :class="[
@@ -370,7 +431,6 @@ onMounted(chargerProjet)
                 </div>
               </div>
 
-              <!-- Mini progress bar -->
               <div class="h-1 w-full rounded-full bg-fond overflow-hidden">
                 <div
                   class="h-1 rounded-full transition-all duration-500"
@@ -390,9 +450,8 @@ onMounted(chargerProjet)
               </div>
             </div>
 
-            <!-- Indicateur actif -->
             <div v-if="phaseActive?.id === phase.id" class="h-0.5 w-full bg-primary"></div>
-          </button>
+          </div>
         </div>
 
         <!-- ── Panneau droit : kanban des tâches ── -->
@@ -456,7 +515,7 @@ onMounted(chargerProjet)
                   v-for="tache in tachesDeLaColonne(col.statut)"
                   :key="tache.id"
                   class="group rounded-xl bg-carte border border-bordure p-3 shadow-card transition-all hover:shadow-soft hover:-translate-y-0.5 cursor-pointer"
-                  @click="ouvrirEditionTache(tache, $event)"
+                  @click="ouvrirDetailTache(tache, $event)"
                 >
                   <p class="text-xs font-bold text-texte line-clamp-2 mb-2">{{ tache.titre }}</p>
 
@@ -465,14 +524,14 @@ onMounted(chargerProjet)
                     <div class="flex justify-between mb-1">
                       <span class="text-[10px] text-muted">Progression</span>
                       <span class="text-[10px] font-bold text-texte"
-                        >{{ tache.progression ?? 0 }}%</span
+                        >{{ tache.progressionCalculee ?? 0 }}%</span
                       >
                     </div>
                     <div class="h-1.5 w-full rounded-full bg-fond overflow-hidden">
                       <div
                         class="h-1.5 rounded-full transition-all"
                         :class="col.dot"
-                        :style="{ width: `${tache.progression ?? 0}%` }"
+                        :style="{ width: `${tache.progressionCalculee ?? 0}%` }"
                       ></div>
                     </div>
                   </div>
@@ -528,6 +587,14 @@ onMounted(chargerProjet)
       @saved="onTacheSaved"
     />
 
+    <ModalDetailTache
+      v-if="showModalDetailTache"
+      :tache="tacheDetail"
+      @close="showModalDetailTache = false"
+      @saved="onTacheSaved"
+      @deleted="onTacheDeleted"
+    />
+
     <!-- Confirmation suppression projet -->
     <Teleport to="body">
       <div
@@ -561,6 +628,46 @@ onMounted(chargerProjet)
             >
               <i v-if="loadingDelete" class="fa-solid fa-spinner fa-spin text-xs"></i>
               <i v-else class="fa-solid fa-trash text-xs"></i>
+              Supprimer
+            </button>
+          </div>
+        </div>
+      </div>
+    </Teleport>
+    <!-- Confirmation suppression phase -->
+    <Teleport to="body">
+      <div
+        v-if="confirmDeletePhase"
+        class="fixed inset-0 z-50 flex items-center justify-center p-4"
+        @click.self="confirmDeletePhase = null"
+      >
+        <div
+          class="absolute inset-0 bg-texte/40 backdrop-blur-sm"
+          @click="confirmDeletePhase = null"
+        />
+        <div
+          class="relative z-10 w-full max-w-sm rounded-2xl bg-carte border border-bordure shadow-2xl p-6"
+        >
+          <div class="mb-4 flex h-12 w-12 items-center justify-center rounded-2xl bg-bloque/10">
+            <i class="fa-solid fa-trash text-bloque"></i>
+          </div>
+          <h3 class="text-base font-black text-texte mb-1">Supprimer la phase</h3>
+          <p class="text-sm text-muted mb-5">
+            Cette action est irréversible. Toutes les tâches, affectations et rapports liés à
+            <strong>{{ confirmDeletePhase.libelle }}</strong> seront supprimés.
+          </p>
+          <div class="flex gap-3 justify-end">
+            <button
+              class="rounded-xl border border-bordure px-4 py-2 text-sm font-bold text-muted transition hover:bg-fond"
+              @click="confirmDeletePhase = null"
+            >
+              Annuler
+            </button>
+            <button
+              class="flex items-center gap-2 rounded-xl bg-bloque px-4 py-2 text-sm font-bold text-white transition hover:bg-bloque/90"
+              @click="supprimerPhaseConfirmee"
+            >
+              <i class="fa-solid fa-trash text-xs"></i>
               Supprimer
             </button>
           </div>

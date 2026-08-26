@@ -54,6 +54,17 @@ async function charger() {
   }
 }
 
+function statutVersProgression(statut) {
+  const MAP = {
+    'Non commencer': 0,
+    'En attente': 0,
+    'En cours': tacheSelectee.value?.progression ?? 50,
+    Valider: 100,
+    Renvoyer: tacheSelectee.value?.progression ?? 50,
+  }
+  return MAP[statut] ?? 0
+}
+
 onMounted(charger)
 
 // ─── Actions ──────────────────────────────────────────────────────────────────
@@ -255,46 +266,78 @@ async function renvoyerTache(tache) {
               <p class="text-sm text-texte">{{ tacheSelectee.description }}</p>
             </div>
 
-            <!-- Ouvriers + progression individuelle -->
+            <!-- Progression globale en haut -->
+            <div class="rounded-xl bg-fond p-4">
+              <div class="flex items-center justify-between mb-2">
+                <span class="text-xs font-bold text-texte">Progression globale de la tâche</span>
+                <span class="text-sm font-black text-primary"
+                  >{{ tacheSelectee.progression ?? 0 }}%</span
+                >
+              </div>
+              <div class="h-3 w-full rounded-full bg-white overflow-hidden">
+                <div
+                  class="h-3 rounded-full bg-primary transition-all duration-700"
+                  :style="{ width: `${tacheSelectee.progression ?? 0}%` }"
+                ></div>
+              </div>
+            </div>
+
+            <!-- Progression par ouvrier -->
             <div>
-              <p class="text-xs font-bold text-muted mb-3">Ouvriers assignés</p>
+              <p class="text-xs font-bold text-muted mb-3">
+                Contribution par ouvrier
+                <span class="ml-1 font-normal"
+                  >({{ tacheSelectee.affectations?.length }} assigné(s))</span
+                >
+              </p>
               <div class="space-y-3">
                 <div
                   v-for="aff in tacheSelectee.affectations"
                   :key="aff.id"
-                  class="flex items-center gap-3 rounded-xl bg-fond p-3"
+                  class="rounded-xl border border-bordure p-4"
                 >
-                  <div
-                    class="flex h-9 w-9 items-center justify-center rounded-full bg-primary/10 text-xs font-black text-primary flex-shrink-0"
-                  >
-                    {{ aff.utilisateurId }}
-                  </div>
-                  <div class="flex-1 min-w-0">
-                    <div class="flex items-center justify-between mb-1">
-                      <span class="text-sm font-bold text-texte"
-                        >Ouvrier #{{ aff.utilisateurId }}</span
-                      >
+                  <div class="flex items-center gap-3 mb-3">
+                    <div
+                      class="flex h-9 w-9 items-center justify-center rounded-full bg-primary/10 text-xs font-black text-primary flex-shrink-0"
+                    >
+                      {{ String(aff.utilisateurId).slice(-2) }}
+                    </div>
+                    <div class="flex-1 min-w-0">
+                      <p class="text-sm font-bold text-texte">Ouvrier #{{ aff.utilisateurId }}</p>
                       <span
                         class="text-[11px] font-bold rounded-full px-2 py-0.5"
-                        :class="
-                          aff.statutPersonnel === 'Valider'
-                            ? 'bg-succes/10 text-succes'
-                            : 'bg-attente/10 text-attente'
-                        "
+                        :class="{
+                          'bg-attente/10 text-attente':
+                            aff.statutPersonnel === 'Non commencer' ||
+                            aff.statutPersonnel === 'En attente',
+                          'bg-secondary/10 text-secondary': aff.statutPersonnel === 'En cours',
+                          'bg-succes/10 text-succes': aff.statutPersonnel === 'Valider',
+                          'bg-bloque/10 text-bloque': aff.statutPersonnel === 'Renvoyer',
+                        }"
                       >
                         {{ aff.statutPersonnel }}
                       </span>
                     </div>
-                    <div class="h-1.5 w-full rounded-full bg-white overflow-hidden">
-                      <div
-                        class="h-1.5 rounded-full bg-secondary transition-all"
-                        :style="{ width: `${tacheSelectee.progression ?? 0}%` }"
-                      ></div>
-                    </div>
-                    <p class="text-[11px] text-muted mt-0.5">
-                      {{ tacheSelectee.progression ?? 0 }}% complété
-                    </p>
                   </div>
+
+                  <!-- Barre de progression basée sur le statut personnel -->
+                  <div class="h-2 w-full rounded-full bg-fond overflow-hidden">
+                    <div
+                      class="h-2 rounded-full transition-all duration-500"
+                      :class="{
+                        'bg-attente':
+                          aff.statutPersonnel === 'Non commencer' ||
+                          aff.statutPersonnel === 'En attente',
+                        'bg-secondary': aff.statutPersonnel === 'En cours',
+                        'bg-succes': aff.statutPersonnel === 'Valider',
+                        'bg-bloque': aff.statutPersonnel === 'Renvoyer',
+                      }"
+                      :style="{ width: statutVersProgression(aff.statutPersonnel) + '%' }"
+                    ></div>
+                  </div>
+                  <p class="text-[11px] text-muted mt-1 text-right">
+                    {{ statutVersProgression(aff.statutPersonnel) }}%
+                  </p>
                 </div>
               </div>
             </div>

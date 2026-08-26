@@ -66,10 +66,15 @@ onMounted(charger)
 async function demarrerTache(affectation) {
   actionLoading.value = affectation.id
   try {
-    // Passe le statut tâche à "En cours"
     await tacheService.modifier(affectation.tacheId, { statutTache: 'En cours' })
-    // Passe le statut personnel à "En cours"
     await affectationService.modifier(affectation.id, { statutPersonnel: 'En cours' })
+
+    // Fait passer la phase en "En cours" si elle était encore "En attente"
+    const phase = await phaseService.detail(affectation.phaseId)
+    if (phase.statutPhase === 'En attente') {
+      await phaseService.modifier(phase.id, { statutPhase: 'En cours' })
+    }
+
     showToast('Tâche démarrée.')
     await charger()
   } catch (e) {
@@ -79,14 +84,35 @@ async function demarrerTache(affectation) {
   }
 }
 
-async function mettreAJourProgression(affectation, progression) {
+const progressionsLocales = ref({}) // { [affectationId]: valeur }
+const savingProgression = ref(null)
+
+function onSliderChange(aff, valeur) {
+  progressionsLocales.value[aff.id] = Number(valeur)
+}
+
+function progressionAffichee(aff) {
+  return progressionsLocales.value[aff.id] ?? aff.progression ?? 0
+}
+
+function aEteModifiee(aff) {
+  const locale = progressionsLocales.value[aff.id]
+  return locale !== undefined && locale !== (aff.progression ?? 0)
+}
+
+async function enregistrerProgression(aff) {
+  savingProgression.value = aff.id
   try {
-    await tacheService.modifier(affectation.tacheId, { progression: Number(progression) })
-    // Mise à jour locale immédiate
-    const idx = affectations.value.findIndex((a) => a.id === affectation.id)
-    if (idx !== -1) affectations.value[idx].tache.progression = Number(progression)
+    const valeur = progressionsLocales.value[aff.id]
+    await affectationService.modifier(aff.id, { progression: valeur })
+    const idx = affectations.value.findIndex((a) => a.id === aff.id)
+    if (idx !== -1) affectations.value[idx].progression = valeur
+    delete progressionsLocales.value[aff.id]
+    showToast('Progression enregistrée.')
   } catch (e) {
-    showToast('Erreur lors de la mise à jour.', 'error')
+    showToast("Erreur lors de l'enregistrement.", 'error')
+  } finally {
+    savingProgression.value = null
   }
 }
 
@@ -201,32 +227,54 @@ async function terminerTache(affectation) {
                 <div class="flex items-center justify-between">
                   <span class="text-xs font-bold text-texte">Ma progression</span>
                   <span class="text-xs font-black text-primary"
-                    >{{ aff.tache?.progression ?? 0 }}%</span
+                    >{{ progressionAffichee(aff) }}%</span
                   >
                 </div>
+
                 <input
                   type="range"
                   min="0"
                   max="100"
                   step="5"
-                  :value="aff.tache?.progression ?? 0"
+                  :value="progressionAffichee(aff)"
                   class="w-full accent-primary"
-                  @change="mettreAJourProgression(aff, $event.target.value)"
+                  @input="onSliderChange(aff, $event.target.value)"
                 />
+
                 <div class="h-2 w-full rounded-full bg-fond overflow-hidden">
                   <div
                     class="h-2 rounded-full bg-secondary transition-all duration-500"
-                    :style="{ width: `${aff.tache?.progression ?? 0}%` }"
+                    :style="{ width: `${progressionAffichee(aff)}%` }"
                   ></div>
                 </div>
 
-                <!-- Alerte rapport obligatoire si 100% -->
-                <div
-                  v-if="aff.tache?.progression === 100"
-                  class="rounded-xl bg-primary/5 border border-primary/20 px-4 py-3 text-xs text-primary flex items-center gap-2"
-                >
-                  <i class="fa-solid fa-file-lines"></i>
-                  Progression à 100% — un rapport avec photos est requis avant de terminer.
+                <!-- Bouton enregistrer -->
+                <div class="flex items-center justify-between">
+                  <span
+                    v-if="progressionAffichee(aff) === 100"
+                    class="text-xs text-primary flex items-center gap-1"
+                  >
+                    <i class="fa-solid fa-info-circle text-[10px]"></i>
+                    Un rapport est requis avant de terminer.
+                  </span>
+                  <span v-else></span>
+                  <button
+                    class="flex items-center gap-2 rounded-xl px-3 py-1.5 text-xs font-bold transition disabled:opacity-40"
+                    :class="
+                      aEteModifiee(aff)
+                        ? 'bg-primary text-white hover:bg-primary/90'
+                        : 'bg-fond text-muted border border-bordure cursor-not-allowed'
+                    "
+                    :disabled="!aEteModifiee(aff) || savingProgression === aff.id"
+                    @click="enregistrerProgression(aff)"
+                  >
+                    <i
+                      v-if="savingProgression === aff.id"
+                      class="fa-solid fa-spinner fa-spin text-[10px]"
+                    ></i>
+                    <i v-else class="fa-solid fa-floppy-disk text-[10px]"></i>
+                    Enregistrer
+                  </button>
                 </div>
               </div>
 
@@ -256,7 +304,7 @@ async function terminerTache(affectation) {
 
               <!-- Bouton Écrire le rapport (si 100%) -->
               <button
-                v-if="aff.tache?.statutTache === 'En cours' && aff.tache?.progression === 100"
+                v-if="aff.tache?.statutTache === 'En cours' && aff.progression === 100"
                 class="flex items-center gap-2 rounded-xl bg-primary px-4 py-2 text-sm font-bold text-white transition hover:bg-primary/90"
                 @click="ouvrirRapport(aff)"
               >
@@ -267,9 +315,7 @@ async function terminerTache(affectation) {
               <!-- Bouton Soumettre (si rapport déjà écrit) -->
               <button
                 v-if="
-                  aff.tache?.statutTache === 'En cours' &&
-                  aff.tache?.progression === 100 &&
-                  aff.rapportId
+                  aff.tache?.statutTache === 'En cours' && aff.progression === 100 && aff.rapportId
                 "
                 class="flex items-center gap-2 rounded-xl bg-succes px-4 py-2 text-sm font-bold text-white transition hover:bg-succes/90 disabled:opacity-60"
                 :disabled="actionLoading === aff.id"
