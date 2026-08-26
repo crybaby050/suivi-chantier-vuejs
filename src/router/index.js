@@ -26,6 +26,18 @@ const routes = [
     component: () => import('@/views/ProjetDetailView.vue'),
     meta: { requiresAuth: true },
   },
+  {
+    path: '/taches',
+    name: 'MesTaches',
+    component: () => import('@/views/MesTachesView.vue'),
+    meta: { requiresAuth: true },
+  },
+  {
+  path: '/validation-taches',
+  name: 'ValidationTaches',
+  component: () => import('@/views/ValidationTachesView.vue'),
+  meta: { requiresAuth: true },
+},
   { path: '/:pathMatch(.*)*', redirect: '/' },
 ]
 
@@ -38,6 +50,9 @@ router.beforeEach((to) => {
   const auth = useAuthStore()
   if (to.meta.requiresAuth && !auth.isAuthenticated) return { name: 'Login' }
   if (to.meta.requiresGuest && auth.isAuthenticated) return { name: 'Dashboard' }
+  if (to.name === 'Dashboard' && auth.user?.roleGlobal === 'Ouvrier') {
+    return { name: 'MesTaches' }
+  }
 })
 
 export default router
