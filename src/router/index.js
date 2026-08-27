@@ -45,11 +45,11 @@ const routes = [
     meta: { requiresAuth: true },
   },
   {
-  path: '/utilisateurs',
-  name: 'Utilisateurs',
-  component: () => import('@/views/UtilisateursView.vue'),
-  meta: { requiresAuth: true },
-},
+    path: '/utilisateurs',
+    name: 'Utilisateurs',
+    component: () => import('@/views/UtilisateursView.vue'),
+    meta: { requiresAuth: true },
+  },
   { path: '/:pathMatch(.*)*', redirect: '/' },
 ]
 
@@ -60,9 +60,19 @@ const router = createRouter({
 
 router.beforeEach((to) => {
   const auth = useAuthStore()
-  if (to.meta.requiresAuth && !auth.isAuthenticated) return { name: 'Login' }
-  if (to.meta.requiresGuest && auth.isAuthenticated) return { name: 'Dashboard' }
-  if (to.name === 'Dashboard' && auth.user?.roleGlobal === 'Ouvrier') {
+
+  if (to.meta.requiresAuth && !auth.isAuthenticated) {
+    return { name: 'Login' }
+  }
+
+  if (to.meta.requiresGuest && auth.isAuthenticated) {
+    return { name: 'Dashboard' }
+  }
+
+  if (
+    to.name === 'Dashboard' &&
+    auth.user?.roleGlobal === 'Ouvrier'
+  ) {
     return { name: 'MesTaches' }
   }
 })

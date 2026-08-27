@@ -35,15 +35,19 @@ export const useAuthStore = defineStore('auth', () => {
         }
     }
 
-    // Appelé au démarrage de l'app pour restaurer la session
     async function fetchMe() {
         if (!token.value) return
+
         try {
             const data = await authService.me()
             user.value = data.user
-        } catch (_) {
-            // Token expiré ou invalide — l'intercepteur axios gère la redirection
-            logout()
+        } catch (err) {
+            // Le serveur refuse réellement le token
+            if (err.response?.status === 401) {
+                token.value = null
+                user.value = null
+                localStorage.removeItem('token')
+            }
         }
     }
 
