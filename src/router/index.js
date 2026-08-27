@@ -44,6 +44,12 @@ const routes = [
     component: () => import('@/views/MessagerieView.vue'),
     meta: { requiresAuth: true },
   },
+  {
+  path: '/utilisateurs',
+  name: 'Utilisateurs',
+  component: () => import('@/views/UtilisateursView.vue'),
+  meta: { requiresAuth: true },
+},
   { path: '/:pathMatch(.*)*', redirect: '/' },
 ]
 
