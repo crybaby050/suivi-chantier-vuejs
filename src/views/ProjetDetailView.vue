@@ -148,11 +148,33 @@ async function selectionnerPhase(phase) {
       liste.map(async (t) => {
         const affs = await affectationService.listerParTache(t.id)
         return { ...t, progressionCalculee: calcProgressionMoyenne(affs) }
-      })
+      }),
     )
     progressionParPhase.value[phase.id] = calcProgPhase(taches.value)
   } finally {
     loadingTaches.value = false
+  }
+}
+
+async function demarrerProjet() {
+  try {
+    const updated = await projetService.modifier(projet.value.id, { statutProjet: 'En cours' })
+    projet.value = updated
+    showToast('Projet démarré.')
+  } catch (e) {
+    showToast('Erreur lors du démarrage.', 'error')
+  }
+}
+
+async function demarrerPhase(phase, e) {
+  e.stopPropagation()
+  try {
+    const updated = await phaseService.modifier(phase.id, { statutPhase: 'En cours' })
+    const idx = phases.value.findIndex((p) => p.id === phase.id)
+    if (idx !== -1) phases.value[idx] = updated
+    showToast('Phase démarrée.')
+  } catch (e) {
+    showToast('Erreur lors du démarrage.', 'error')
   }
 }
 
@@ -337,6 +359,16 @@ onMounted(chargerProjet)
 
             <!-- Actions projet -->
             <div v-if="canManage" class="flex gap-2 flex-shrink-0">
+              <!-- Bouton Démarrer — visible uniquement si Planifier -->
+              <button
+                v-if="projet.statutProjet === 'Planifier'"
+                class="flex items-center gap-2 rounded-xl bg-secondary px-3 py-2 text-xs font-bold text-white transition hover:bg-secondary/90"
+                @click="demarrerProjet"
+              >
+                <i class="fa-solid fa-play text-[10px]"></i>
+                Démarrer le projet
+              </button>
+
               <button
                 class="flex items-center gap-2 rounded-xl border border-bordure px-3 py-2 text-xs font-bold text-muted transition hover:bg-fond hover:text-primary"
                 @click="ouvrirEdition"
@@ -407,6 +439,16 @@ onMounted(chargerProjet)
                   {{ phase.libelle }}
                 </span>
                 <div class="flex items-center gap-1 flex-shrink-0">
+                  <!-- Démarrer phase — visible si En attente -->
+                  <button
+                    v-if="canManage && phase.statutPhase === 'En attente'"
+                    class="opacity-0 group-hover:opacity-100 transition flex items-center gap-1 rounded-lg bg-secondary/10 px-1.5 py-0.5 text-[9px] font-bold text-secondary hover:bg-secondary hover:text-white"
+                    @click.stop="demarrerPhase(phase, $event)"
+                  >
+                    <i class="fa-solid fa-play text-[8px]"></i>
+                    Démarrer
+                  </button>
+
                   <button
                     v-if="canManage"
                     class="opacity-0 group-hover:opacity-100 transition flex h-5 w-5 items-center justify-center rounded text-muted hover:text-primary"

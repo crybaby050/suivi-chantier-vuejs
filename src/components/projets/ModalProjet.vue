@@ -94,7 +94,6 @@ async function soumettre() {
       statutProjet: form.value.statutProjet,
     }
 
-    emit('saved', result)
     const result = isEdit.value
       ? await projetService.modifier(props.projet.id, payload)
       : await projetService.creer(payload)
@@ -105,6 +104,7 @@ async function soumettre() {
     }
 
     showToast(isEdit.value ? 'Projet modifié avec succès.' : 'Projet créé avec succès.')
+    emit('saved', result)
     emit('close')
   } catch (e) {
     errors.value.global = e.response?.data?.erreur ?? 'Une erreur est survenue'
@@ -112,6 +112,7 @@ async function soumettre() {
     loading.value = false
   }
 }
+
 </script>
 
 <template>
