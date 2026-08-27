@@ -6,7 +6,7 @@ const routes = [
     path: '/login',
     name: 'Login',
     component: () => import('@/views/LoginView.vue'),
-    meta: { requiresGuest: true }, // redirige si déjà connecté
+    meta: { requiresGuest: true },
   },
   {
     path: '/',
@@ -14,11 +14,43 @@ const routes = [
     component: () => import('@/views/DashboardView.vue'),
     meta: { requiresAuth: true },
   },
-  // Tu ajouteras tes autres routes ici (projets, tâches, signalements...)
   {
-    path: '/:pathMatch(.*)*',
-    redirect: '/',
+    path: '/projets',
+    name: 'Projets',
+    component: () => import('@/views/ProjetsView.vue'),
+    meta: { requiresAuth: true },
   },
+  {
+    path: '/projets/:id',
+    name: 'ProjetDetail',
+    component: () => import('@/views/ProjetDetailView.vue'),
+    meta: { requiresAuth: true },
+  },
+  {
+    path: '/taches',
+    name: 'MesTaches',
+    component: () => import('@/views/MesTachesView.vue'),
+    meta: { requiresAuth: true },
+  },
+  {
+    path: '/validation-taches',
+    name: 'ValidationTaches',
+    component: () => import('@/views/ValidationTachesView.vue'),
+    meta: { requiresAuth: true },
+  },
+  {
+    path: '/messagerie',
+    name: 'Messagerie',
+    component: () => import('@/views/MessagerieView.vue'),
+    meta: { requiresAuth: true },
+  },
+  {
+  path: '/utilisateurs',
+  name: 'Utilisateurs',
+  component: () => import('@/views/UtilisateursView.vue'),
+  meta: { requiresAuth: true },
+},
+  { path: '/:pathMatch(.*)*', redirect: '/' },
 ]
 
 const router = createRouter({
@@ -26,19 +58,13 @@ const router = createRouter({
   routes,
 })
 
-// Guard global
-router.beforeEach((to, from, next) => {
+router.beforeEach((to) => {
   const auth = useAuthStore()
-
-  if (to.meta.requiresAuth && !auth.isAuthenticated) {
-    return next({ name: 'Login' })
+  if (to.meta.requiresAuth && !auth.isAuthenticated) return { name: 'Login' }
+  if (to.meta.requiresGuest && auth.isAuthenticated) return { name: 'Dashboard' }
+  if (to.name === 'Dashboard' && auth.user?.roleGlobal === 'Ouvrier') {
+    return { name: 'MesTaches' }
   }
-
-  if (to.meta.requiresGuest && auth.isAuthenticated) {
-    return next({ name: 'Dashboard' })
-  }
-
-  next()
 })
 
 export default router

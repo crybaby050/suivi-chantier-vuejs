@@ -1,0 +1,25 @@
+@import "tailwindcss";
+
+@theme {
+    --color-primary: #0B3C5D;
+    --color-secondary: #1D6F8C;
+    --color-accent: #E8A33D;
+    --color-fond: #F4F1EC;
+    --color-carte: #FFFFFF;
+    --color-texte: #2B2B28;
+    --color-muted: #6B675E;
+    --color-bordure: #D8D3C8;
+    --color-succes: #3E8E5A;
+    --color-attente: #E8A33D;
+    --color-bloque: #C94A3C;
+    --color-inactif: #8A8578;
+    --color-role-admin: #5B3A9E;
+    --color-role-chef: #0B3C5D;
+    --color-role-ouvrier: #C97A2B;
+    --color-role-client: #3E8E5A;
+
+    --font-family-sans: 'Inter', sans-serif;
+
+    --shadow-soft: 0 2px 12px 0 rgba(11, 60, 93, 0.07);
+    --shadow-card: 0 1px 4px 0 rgba(11, 60, 93, 0.08);
+}
