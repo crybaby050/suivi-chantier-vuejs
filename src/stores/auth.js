@@ -5,15 +5,14 @@ import authService from '@/services/authService'
 export const useAuthStore = defineStore('auth', () => {
     // --- État ---
     const user = ref(null)
-    const token = ref(localStorage.getItem('token') || null)
     const loading = ref(false)
     const error = ref(null)
 
     // --- Getters ---
-    const isAuthenticated = computed(() => !!token.value)
-    const userRole = computed(() => user.value?.role || null)
+    const isAuthenticated = computed(() => !!user.value)
+    const userRole = computed(() => user.value?.roleGlobal || null)
 
-    // Vérifie si l'utilisateur a un rôle donné
+    // Vérifie si l'utilisateur possède un rôle donné
     function hasRole(...roles) {
         return roles.includes(userRole.value)
     }
@@ -22,13 +21,17 @@ export const useAuthStore = defineStore('auth', () => {
     async function login(email, password) {
         loading.value = true
         error.value = null
+
         try {
             const data = await authService.login(email, password)
-            token.value = data.token
+
+            // Le token est maintenant géré par le cookie HttpOnly.
             user.value = data.user
-            localStorage.setItem('token', data.token)
         } catch (err) {
-            error.value = err.response?.data?.message || 'Identifiants incorrects'
+            error.value =
+                err.response?.data?.message ||
+                'Identifiants incorrects'
+
             throw err
         } finally {
             loading.value = false
@@ -36,31 +39,29 @@ export const useAuthStore = defineStore('auth', () => {
     }
 
     async function fetchMe() {
-        if (!token.value) return
-
         try {
             const data = await authService.me()
+
             user.value = data.user
         } catch (err) {
-            // Le serveur refuse réellement le token
             if (err.response?.status === 401) {
-                token.value = null
                 user.value = null
-                localStorage.removeItem('token')
             }
+
+            console.error('Erreur lors de la restauration de la session :', err)
         }
     }
 
     async function logout() {
-        await authService.logout() // ← async + await
-        token.value = null
-        user.value = null
-        localStorage.removeItem('token')
+        try {
+            await authService.logout()
+        } finally {
+            user.value = null
+        }
     }
 
     return {
         user,
-        token,
         loading,
         error,
         isAuthenticated,
