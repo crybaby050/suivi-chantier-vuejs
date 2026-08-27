@@ -6,6 +6,7 @@ import AppSelect from '@/components/ui/AppSelect.vue'
 import projetService from '@/services/projetService'
 import utilisateurService from '@/services/utilisateurService'
 import { useToast } from '@/composables/useToast'
+import conversationService from '@/services/conversationService'
 
 const { showToast } = useToast()
 
@@ -93,11 +94,16 @@ async function soumettre() {
       statutProjet: form.value.statutProjet,
     }
 
+    emit('saved', result)
     const result = isEdit.value
       ? await projetService.modifier(props.projet.id, payload)
       : await projetService.creer(payload)
 
-    emit('saved', result)
+    // Crée automatiquement le groupe de conversation si nouveau projet
+    if (!isEdit.value) {
+      await conversationService.getOuCreerGroupeProjet(result.id)
+    }
+
     showToast(isEdit.value ? 'Projet modifié avec succès.' : 'Projet créé avec succès.')
     emit('close')
   } catch (e) {

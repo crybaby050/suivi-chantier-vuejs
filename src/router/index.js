@@ -33,11 +33,17 @@ const routes = [
     meta: { requiresAuth: true },
   },
   {
-  path: '/validation-taches',
-  name: 'ValidationTaches',
-  component: () => import('@/views/ValidationTachesView.vue'),
-  meta: { requiresAuth: true },
-},
+    path: '/validation-taches',
+    name: 'ValidationTaches',
+    component: () => import('@/views/ValidationTachesView.vue'),
+    meta: { requiresAuth: true },
+  },
+  {
+    path: '/messagerie',
+    name: 'Messagerie',
+    component: () => import('@/views/MessagerieView.vue'),
+    meta: { requiresAuth: true },
+  },
   { path: '/:pathMatch(.*)*', redirect: '/' },
 ]
 
