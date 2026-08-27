@@ -101,7 +101,6 @@ const progressionProjet = computed(() => {
 })
 
 // ─── Calculés ─────────────────────────────────────────────────────────────────
-// APRÈS
 function calcProgPhase(listeTaches) {
   if (!listeTaches.length) return 0
   const terminees = listeTaches.filter((t) => t.statutTache === 'Terminer').length
@@ -125,7 +124,6 @@ async function chargerProjet() {
     projet.value = p
     phases.value = ph
 
-    // Calcul progression de toutes les phases en parallèle
     await Promise.all(
       ph.map(async (phase) => {
         const t = await tacheService.listerParPhase(phase.id)
@@ -309,11 +307,11 @@ onMounted(chargerProjet)
           class="h-1.5 w-full"
           :class="STATUT_PROJET[projet.statutProjet]?.dot ?? 'bg-muted'"
         ></div>
-        <div class="p-5 sm:p-6">
+        <div class="p-4 sm:p-6">
           <div class="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
             <div class="min-w-0 flex-1">
               <div class="flex flex-wrap items-center gap-2 mb-1">
-                <h1 class="text-xl font-black text-texte">{{ projet.nom }}</h1>
+                <h1 class="text-lg sm:text-xl font-black text-texte">{{ projet.nom }}</h1>
                 <span
                   class="rounded-full px-2.5 py-0.5 text-xs font-bold"
                   :class="STATUT_PROJET[projet.statutProjet]?.badge ?? 'bg-muted/10 text-muted'"
@@ -321,7 +319,7 @@ onMounted(chargerProjet)
                   {{ STATUT_PROJET[projet.statutProjet]?.label ?? projet.statutProjet }}
                 </span>
               </div>
-              <div class="flex flex-wrap gap-4 text-xs text-muted mt-2">
+              <div class="flex flex-wrap gap-3 sm:gap-4 text-xs text-muted mt-2">
                 <span class="flex items-center gap-1.5">
                   <i class="fa-solid fa-location-dot"></i>
                   {{ projet.adresse }}
@@ -358,8 +356,7 @@ onMounted(chargerProjet)
             </div>
 
             <!-- Actions projet -->
-            <div v-if="canManage" class="flex gap-2 flex-shrink-0">
-              <!-- Bouton Démarrer — visible uniquement si Planifier -->
+            <div v-if="canManage" class="flex flex-wrap gap-2 sm:flex-shrink-0">
               <button
                 v-if="projet.statutProjet === 'Planifier'"
                 class="flex items-center gap-2 rounded-xl bg-secondary px-3 py-2 text-xs font-bold text-white transition hover:bg-secondary/90"
@@ -390,9 +387,9 @@ onMounted(chargerProjet)
       </div>
 
       <!-- Corps : phases + tâches -->
-      <div class="flex gap-4 min-h-[600px]">
+      <div class="flex flex-col lg:flex-row gap-4 lg:min-h-[600px]">
         <!-- ── Panneau gauche : phases ── -->
-        <div class="w-64 flex-shrink-0 flex flex-col gap-3">
+        <div class="w-full lg:w-64 flex-shrink-0 flex flex-col gap-3">
           <div class="flex items-center justify-between">
             <h2 class="text-xs font-black uppercase tracking-widest text-muted/70">
               Phases <span class="ml-1 text-muted">{{ phases.length }}</span>
@@ -415,91 +412,92 @@ onMounted(chargerProjet)
             <p class="text-xs text-muted">Aucune phase créée</p>
           </div>
 
-          <!-- Liste des phases -->
-          <div
-            v-for="phase in phases"
-            :key="phase.id"
-            role="button"
-            tabindex="0"
-            class="group w-full text-left rounded-xl border transition-all duration-150 overflow-hidden cursor-pointer"
-            :class="
-              phaseActive?.id === phase.id
-                ? 'border-primary/30 bg-primary/5 shadow-soft'
-                : 'border-bordure bg-carte hover:border-primary/20 hover:bg-fond'
-            "
-            @click="selectionnerPhase(phase)"
-            @keydown.enter="selectionnerPhase(phase)"
-          >
-            <div class="p-3">
-              <div class="flex items-center justify-between gap-2 mb-1.5">
-                <span
-                  class="text-sm font-bold truncate"
-                  :class="phaseActive?.id === phase.id ? 'text-primary' : 'text-texte'"
-                >
-                  {{ phase.libelle }}
-                </span>
-                <div class="flex items-center gap-1 flex-shrink-0">
-                  <!-- Démarrer phase — visible si En attente -->
-                  <button
-                    v-if="canManage && phase.statutPhase === 'En attente'"
-                    class="opacity-0 group-hover:opacity-100 transition flex items-center gap-1 rounded-lg bg-secondary/10 px-1.5 py-0.5 text-[9px] font-bold text-secondary hover:bg-secondary hover:text-white"
-                    @click.stop="demarrerPhase(phase, $event)"
+          <!-- Liste des phases : scroll horizontal sur mobile, verticale dès lg -->
+          <div class="flex gap-2 overflow-x-auto pb-1 lg:flex-col lg:overflow-visible lg:pb-0">
+            <div
+              v-for="phase in phases"
+              :key="phase.id"
+              role="button"
+              tabindex="0"
+              class="group w-64 sm:w-72 lg:w-full flex-shrink-0 text-left rounded-xl border transition-all duration-150 overflow-hidden cursor-pointer"
+              :class="
+                phaseActive?.id === phase.id
+                  ? 'border-primary/30 bg-primary/5 shadow-soft'
+                  : 'border-bordure bg-carte hover:border-primary/20 hover:bg-fond'
+              "
+              @click="selectionnerPhase(phase)"
+              @keydown.enter="selectionnerPhase(phase)"
+            >
+              <div class="p-3">
+                <div class="flex items-center justify-between gap-2 mb-1.5">
+                  <span
+                    class="text-sm font-bold truncate"
+                    :class="phaseActive?.id === phase.id ? 'text-primary' : 'text-texte'"
                   >
-                    <i class="fa-solid fa-play text-[8px]"></i>
-                    Démarrer
-                  </button>
+                    {{ phase.libelle }}
+                  </span>
+                  <div class="flex items-center gap-1 flex-shrink-0">
+                    <button
+                      v-if="canManage && phase.statutPhase === 'En attente'"
+                      class="opacity-100 lg:opacity-0 lg:group-hover:opacity-100 transition flex items-center gap-1 rounded-lg bg-secondary/10 px-1.5 py-0.5 text-[9px] font-bold text-secondary hover:bg-secondary hover:text-white"
+                      @click.stop="demarrerPhase(phase, $event)"
+                    >
+                      <i class="fa-solid fa-play text-[8px]"></i>
+                      Démarrer
+                    </button>
 
-                  <button
-                    v-if="canManage"
-                    class="opacity-0 group-hover:opacity-100 transition flex h-5 w-5 items-center justify-center rounded text-muted hover:text-primary"
-                    @click.stop="ouvrirEditionPhase(phase, $event)"
+                    <button
+                      v-if="canManage"
+                      class="opacity-100 lg:opacity-0 lg:group-hover:opacity-100 transition flex h-5 w-5 items-center justify-center rounded text-muted hover:text-primary"
+                      @click.stop="ouvrirEditionPhase(phase, $event)"
+                    >
+                      <i class="fa-solid fa-pen text-[9px]"></i>
+                    </button>
+                    <button
+                      v-if="isAdmin"
+                      class="opacity-100 lg:opacity-0 lg:group-hover:opacity-100 transition flex h-5 w-5 items-center justify-center rounded text-muted hover:text-bloque"
+                      @click.stop="demanderSuppressionPhase(phase, $event)"
+                    >
+                      <i class="fa-solid fa-trash text-[9px]"></i>
+                    </button>
+                    <i
+                      class="fa-solid text-[10px]"
+                      :class="[
+                        STATUT_PHASE[phase.statutPhase]?.icon ?? 'fa-circle',
+                        phaseActive?.id === phase.id ? 'text-primary' : 'text-muted',
+                      ]"
+                    ></i>
+                  </div>
+                </div>
+
+                <div class="h-1 w-full rounded-full bg-fond overflow-hidden">
+                  <div
+                    class="h-1 rounded-full transition-all duration-500"
+                    :class="phaseActive?.id === phase.id ? 'bg-primary' : 'bg-bordure'"
+                    :style="{ width: `${progressionParPhase[phase.id] ?? 0}%` }"
+                  ></div>
+                </div>
+
+                <div class="mt-1.5 flex items-center justify-between">
+                  <span
+                    class="rounded-full px-2 py-0.5 text-[10px] font-bold"
+                    :class="STATUT_PHASE[phase.statutPhase]?.badge ?? 'bg-muted/10 text-muted'"
                   >
-                    <i class="fa-solid fa-pen text-[9px]"></i>
-                  </button>
-                  <button
-                    v-if="isAdmin"
-                    class="opacity-0 group-hover:opacity-100 transition flex h-5 w-5 items-center justify-center rounded text-muted hover:text-bloque"
-                    @click.stop="demanderSuppressionPhase(phase, $event)"
-                  >
-                    <i class="fa-solid fa-trash text-[9px]"></i>
-                  </button>
-                  <i
-                    class="fa-solid text-[10px]"
-                    :class="[
-                      STATUT_PHASE[phase.statutPhase]?.icon ?? 'fa-circle',
-                      phaseActive?.id === phase.id ? 'text-primary' : 'text-muted',
-                    ]"
-                  ></i>
+                    {{ phase.statutPhase }}
+                  </span>
+                  <span class="text-[10px] text-muted">Ordre {{ phase.ordre }}</span>
                 </div>
               </div>
 
-              <div class="h-1 w-full rounded-full bg-fond overflow-hidden">
-                <div
-                  class="h-1 rounded-full transition-all duration-500"
-                  :class="phaseActive?.id === phase.id ? 'bg-primary' : 'bg-bordure'"
-                  :style="{ width: `${progressionParPhase[phase.id] ?? 0}%` }"
-                ></div>
-              </div>
-
-              <div class="mt-1.5 flex items-center justify-between">
-                <span
-                  class="rounded-full px-2 py-0.5 text-[10px] font-bold"
-                  :class="STATUT_PHASE[phase.statutPhase]?.badge ?? 'bg-muted/10 text-muted'"
-                >
-                  {{ phase.statutPhase }}
-                </span>
-                <span class="text-[10px] text-muted">Ordre {{ phase.ordre }}</span>
-              </div>
+              <div v-if="phaseActive?.id === phase.id" class="h-0.5 w-full bg-primary"></div>
             </div>
-
-            <div v-if="phaseActive?.id === phase.id" class="h-0.5 w-full bg-primary"></div>
           </div>
         </div>
 
         <!-- ── Panneau droit : kanban des tâches ── -->
         <div class="flex-1 min-w-0">
           <!-- Header kanban -->
-          <div class="mb-3 flex items-center justify-between">
+          <div class="mb-3 flex flex-wrap items-center justify-between gap-2">
             <div>
               <h2 class="text-sm font-black text-texte">
                 {{ phaseActive ? phaseActive.libelle : 'Sélectionne une phase' }}
@@ -524,11 +522,14 @@ onMounted(chargerProjet)
           </div>
 
           <!-- Kanban -->
-          <div v-else-if="phaseActive" class="flex gap-3 overflow-x-auto pb-4">
+          <div
+            v-else-if="phaseActive"
+            class="flex gap-3 overflow-x-auto pb-4 snap-x snap-mandatory"
+          >
             <div
               v-for="col in COLONNES_KANBAN"
               :key="col.statut"
-              class="flex-shrink-0 w-56 flex flex-col rounded-2xl border-t-2 border border-bordure overflow-hidden"
+              class="flex-shrink-0 w-[85vw] sm:w-64 lg:w-56 snap-start flex flex-col rounded-2xl border-t-2 border border-bordure overflow-hidden"
               :class="[col.color, col.bg]"
             >
               <!-- Header colonne -->
@@ -543,7 +544,9 @@ onMounted(chargerProjet)
               </div>
 
               <!-- Cartes tâches -->
-              <div class="flex flex-col gap-2 p-2 flex-1 overflow-y-auto max-h-[520px]">
+              <div
+                class="flex flex-col gap-2 p-2 flex-1 overflow-y-auto max-h-[400px] sm:max-h-[520px]"
+              >
                 <!-- État vide -->
                 <div
                   v-if="!tachesDeLaColonne(col.statut).length"
