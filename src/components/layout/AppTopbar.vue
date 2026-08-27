@@ -51,26 +51,17 @@ function onClickOutside(e) {
 
 onMounted(() => document.addEventListener('click', onClickOutside))
 onUnmounted(() => document.removeEventListener('click', onClickOutside))
-
 </script>
 
 <template>
   <header
-    class="fixed top-0 right-0 z-20 h-16 bg-primary shadow-soft transition-all duration-300"
-    :class="collapsed ? 'left-16' : 'lg:left-64 left-0'"
+    class="fixed top-0 right-0 left-0 z-20 h-16 bg-primary shadow-soft transition-all duration-300"
+    :class="collapsed ? 'lg:left-16' : 'lg:left-64'"
     @click.self="closeDropdown"
   >
     <div class="flex h-full items-center px-4 sm:px-6">
-      <!-- Bouton menu mobile -->
-      <button
-        class="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl bg-white/10 text-white transition hover:bg-white/20 lg:hidden"
-        @click="$emit('toggle-sidebar')"
-      >
-        <i class="fa-solid fa-bars text-sm"></i>
-      </button>
-
       <!-- Titre -->
-      <div class="ml-3 lg:ml-0">
+      <div>
         <span class="text-sm font-bold text-white sm:text-base">{{ title }}</span>
       </div>
 
