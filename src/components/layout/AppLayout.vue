@@ -13,7 +13,7 @@ const sidebarRef = ref(null)
 
 <template>
   <div class="flex min-h-screen bg-fond">
-    <!-- Sidebar : visible seulement à partir de lg -->
+    <!-- Sidebar : visible seulement à partir de lg  -->
     <div class="hidden lg:block">
       <AppSidebar ref="sidebarRef" />
     </div>
