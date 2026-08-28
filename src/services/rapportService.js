@@ -6,7 +6,6 @@ const rapportService = {
     async creer(projetId, data) { return (await api.post(`/projets/${projetId}/rapports`, data)).data },
     async modifier(id, data) { return (await api.patch(`/rapports/${id}`, data)).data },
     async supprimer(id) { return (await api.delete(`/rapports/${id}`)).data },
-
     async ajouterPhotos(rapportId, fichiers) {
         const form = new FormData()
         fichiers.forEach(f => form.append('photos', f))
