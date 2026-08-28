@@ -22,29 +22,10 @@ const messages = ref([])
 const loadingConvs = ref(true)
 const loadingMessages = ref(false)
 const contenu = ref('')
-const photosEnAttente = ref([]) // File[]
-const previewsEnAttente = ref([]) // URLs
+const photosEnAttente = ref([])
+const previewsEnAttente = ref([])
 const envoyant = ref(false)
-const messagesRef = ref(null) // ref sur le conteneur scroll
-
-// ─── Chargement conversations ─────────────────────────────────────────────────
-
-//async function chargerConversations() {
-//  loadingConvs.value = true
-//  try {
-//    const data = await conversationService.listerMesConversations()
-//    // Enrichit avec le nom du projet
-//    const projets = await projetService.lister()
-//    conversations.value = data.map((conv) => {
-//      const projet = projets.find((p) => p.id === conv.projetId)
-//      return { ...conv, projetNom: projet?.nom ?? `Projet #${conv.projetId}` }
-//    })
-//  } finally {
-//    loadingConvs.value = false
-//  }
-//}
-
-// ─── Sélection conversation ───────────────────────────────────────────────────
+const messagesRef = ref(null)
 
 async function selectionnerConversation(conv) {
   conversationActive.value = conv
@@ -56,6 +37,10 @@ async function selectionnerConversation(conv) {
   } finally {
     loadingMessages.value = false
   }
+}
+
+function retourListe() {
+  conversationActive.value = null
 }
 
 function scrollBas() {
@@ -73,12 +58,9 @@ async function chargerConversations() {
     let projetsFiltres = projets
 
     if (!isAdmin.value) {
-      // Récupère tous les projets où l'utilisateur a une affectation
       const affectations = await affectationService.listerParUtilisateur(auth.user.id)
 
       if (auth.user.roleGlobal === 'Ouvrier') {
-        // Ouvrier : accès aux projets où il a des tâches assignées
-        const phaseIds = new Set()
         const projetIds = new Set()
 
         await Promise.all(
@@ -93,7 +75,6 @@ async function chargerConversations() {
 
         projetsFiltres = projets.filter((p) => projetIds.has(p.id))
       } else {
-        // Chef de chantier / Client : membres du projet
         const membershipsResults = await Promise.all(
           projets.map(async (projet) => {
             try {
@@ -156,7 +137,6 @@ async function envoyerMessage() {
   try {
     let urls = []
 
-    // Upload photos si présentes
     if (photosEnAttente.value.length) {
       const res = await messageService.uploaderPhotos(photosEnAttente.value)
       urls = res.urls
@@ -215,7 +195,12 @@ function memeJour(a, b) {
       class="flex gap-0 h-[calc(100vh-theme(spacing.32))] -mx-4 sm:-mx-6 lg:-mx-8 overflow-hidden rounded-2xl border border-bordure shadow-card bg-carte"
     >
       <!-- ── Panneau gauche : liste des groupes ── -->
-      <div class="w-72 flex-shrink-0 flex flex-col border-r border-bordure">
+      <!-- Mobile/tablette : plein écran, masqué si une conversation est ouverte -->
+      <!-- Desktop (lg+) : toujours visible, largeur fixe -->
+      <div
+        class="w-full lg:w-72 flex-shrink-0 flex-col border-r border-bordure"
+        :class="conversationActive ? 'hidden lg:flex' : 'flex'"
+      >
         <!-- Header -->
         <div class="px-4 py-4 border-b border-bordure">
           <h2 class="text-sm font-black text-texte">Mes groupes</h2>
@@ -265,8 +250,10 @@ function memeJour(a, b) {
       </div>
 
       <!-- ── Panneau droit : messages ── -->
-      <div class="flex-1 flex flex-col min-w-0">
-        <!-- Pas de conversation sélectionnée -->
+      <!-- Mobile/tablette : plein écran, visible seulement si une conversation est ouverte -->
+      <!-- Desktop (lg+) : toujours visible -->
+      <div class="flex-1 min-w-0 flex-col" :class="conversationActive ? 'flex' : 'hidden lg:flex'">
+        <!-- Pas de conversation sélectionnée (desktop uniquement, car masqué sur mobile) -->
         <div
           v-if="!conversationActive"
           class="flex-1 flex flex-col items-center justify-center text-center p-8"
@@ -280,18 +267,31 @@ function memeJour(a, b) {
 
         <template v-else>
           <!-- Header conversation -->
-          <div class="flex items-center gap-3 px-5 py-4 border-b border-bordure flex-shrink-0">
-            <div class="flex h-9 w-9 items-center justify-center rounded-xl bg-primary/10">
+          <div
+            class="flex items-center gap-3 px-4 sm:px-5 py-4 border-b border-bordure flex-shrink-0"
+          >
+            <!-- Bouton retour, visible seulement en dessous de lg -->
+            <button
+              class="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg text-muted transition hover:bg-fond hover:text-primary lg:hidden"
+              @click="retourListe"
+            >
+              <i class="fa-solid fa-arrow-left text-sm"></i>
+            </button>
+            <div
+              class="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl bg-primary/10"
+            >
               <i class="fa-solid fa-building text-sm text-primary"></i>
             </div>
-            <div>
-              <p class="text-sm font-black text-texte">{{ conversationActive.projetNom }}</p>
+            <div class="min-w-0">
+              <p class="text-sm font-black text-texte truncate">
+                {{ conversationActive.projetNom }}
+              </p>
               <p class="text-xs text-muted">Groupe projet</p>
             </div>
           </div>
 
           <!-- Messages -->
-          <div ref="messagesRef" class="flex-1 overflow-y-auto px-5 py-4 space-y-1">
+          <div ref="messagesRef" class="flex-1 overflow-y-auto px-3 sm:px-5 py-4 space-y-1">
             <div v-if="loadingMessages" class="flex justify-center py-8">
               <i class="fa-solid fa-spinner fa-spin text-primary"></i>
             </div>
@@ -330,7 +330,7 @@ function memeJour(a, b) {
 
                   <!-- Contenu -->
                   <div
-                    class="max-w-[65%] flex flex-col gap-1"
+                    class="max-w-[80%] sm:max-w-[65%] flex flex-col gap-1"
                     :class="estMoi(msg) ? 'items-end' : 'items-start'"
                   >
                     <!-- Texte -->
@@ -364,7 +364,7 @@ function memeJour(a, b) {
                         v-for="(url, i) in msg.photos"
                         :key="i"
                         :src="url"
-                        class="rounded-xl max-w-[200px] object-cover cursor-pointer hover:opacity-90 transition"
+                        class="rounded-xl max-w-[150px] sm:max-w-[200px] object-cover cursor-pointer hover:opacity-90 transition"
                       />
                     </div>
 
@@ -379,13 +379,13 @@ function memeJour(a, b) {
           </div>
 
           <!-- Zone de saisie -->
-          <div class="border-t border-bordure px-4 py-3 flex-shrink-0">
+          <div class="border-t border-bordure px-3 sm:px-4 py-3 flex-shrink-0">
             <!-- Previews photos -->
             <div v-if="previewsEnAttente.length" class="flex gap-2 mb-3 flex-wrap">
               <div v-for="(url, idx) in previewsEnAttente" :key="idx" class="relative group">
                 <img :src="url" class="h-16 w-16 rounded-xl object-cover" />
                 <button
-                  class="absolute -top-1 -right-1 flex h-5 w-5 items-center justify-center rounded-full bg-bloque text-white opacity-0 group-hover:opacity-100 transition"
+                  class="absolute -top-1 -right-1 flex h-5 w-5 items-center justify-center rounded-full bg-bloque text-white opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition"
                   @click="retirerPhoto(idx)"
                 >
                   <i class="fa-solid fa-xmark text-[9px]"></i>
