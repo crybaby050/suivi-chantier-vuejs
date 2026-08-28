@@ -61,7 +61,6 @@ const routes = [
     name: 'NotFound',
     component: () => import('@/views/NotFound.vue'),
   },
-  { path: '/:pathMatch(.*)*', redirect: '/' },
 ]
 
 const router = createRouter({
@@ -69,8 +68,13 @@ const router = createRouter({
   routes,
 })
 
-router.beforeEach((to) => {
+router.beforeEach(async (to) => {
   const auth = useAuthStore()
+
+  // Attend la vérification de session (une seule fois, au premier chargement)
+  if (!auth.initialized) {
+    await auth.init()
+  }
 
   if (to.meta.requiresAuth && !auth.isAuthenticated) {
     return { name: 'Login' }
@@ -80,10 +84,7 @@ router.beforeEach((to) => {
     return { name: 'Dashboard' }
   }
 
-  if (
-    to.name === 'Dashboard' &&
-    auth.user?.roleGlobal === 'Ouvrier'
-  ) {
+  if (to.name === 'Dashboard' && auth.user?.roleGlobal === 'Ouvrier') {
     return { name: 'MesTaches' }
   }
 })
