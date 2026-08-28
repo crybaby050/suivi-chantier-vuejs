@@ -56,6 +56,11 @@ const routes = [
     component: () => import('@/views/RapportsView.vue'),
     meta: { requiresAuth: true },
   },
+  {
+    path: '/:pathMatch(.*)*',
+    name: 'NotFound',
+    component: () => import('@/views/NotFound.vue'),
+  },
   { path: '/:pathMatch(.*)*', redirect: '/' },
 ]
 

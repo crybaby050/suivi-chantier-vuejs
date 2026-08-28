@@ -5,6 +5,7 @@ import AppLayout from '@/components/layout/AppLayout.vue'
 import projetService from '@/services/projetService'
 import phaseService from '@/services/phaseService'
 import tacheService from '@/services/tacheService'
+import affectationService from '@/services/affectationService'
 import { useRole } from '@/composables/useRole'
 import { useAuthStore } from '@/stores/auth'
 import { useToast } from '@/composables/useToast'
@@ -12,13 +13,16 @@ import ModalProjet from '@/components/projets/ModalProjet.vue'
 import ModalPhase from '@/components/phases/ModalPhase.vue'
 import ModalTache from '@/components/taches/ModalTache.vue'
 import ModalDetailTache from '@/components/taches/ModalDetailTache.vue'
-import affectationService from '@/services/affectationService'
+import ModalRapport from '@/components/rapports/ModalRapport.vue'
 
 const route = useRoute()
 const router = useRouter()
 const auth = useAuthStore()
 const { canManage, isAdmin } = useRole()
 const { showToast } = useToast()
+
+// isAdmin est déjà dans useRole, on crée adminRole comme alias
+const { isAdmin: adminRole } = useRole()
 
 // ─── État ─────────────────────────────────────────────────────────────────────
 const projet = ref(null)
@@ -35,12 +39,12 @@ const showModalPhase = ref(false)
 const phaseEditee = ref(null)
 const showModalTache = ref(false)
 const tacheEditee = ref(null)
-
 const showModalDetailTache = ref(false)
 const tacheDetail = ref(null)
-
-const progressionParPhase = ref({})
+const showModalRapport = ref(false)
+const rapportContext = ref({ projetId: null, phaseId: null, tacheId: null })
 const confirmDeletePhase = ref(null)
+const progressionParPhase = ref({})
 
 // ─── Configs statuts ──────────────────────────────────────────────────────────
 const STATUT_PROJET = {
@@ -94,13 +98,14 @@ const COLONNES_KANBAN = [
   },
 ]
 
+// ─── Calculés ─────────────────────────────────────────────────────────────────
+
 const progressionProjet = computed(() => {
   if (!phases.value.length) return 0
   const terminees = phases.value.filter((p) => p.statutPhase === 'Terminer').length
   return Math.round((terminees / phases.value.length) * 100)
 })
 
-// ─── Calculés ─────────────────────────────────────────────────────────────────
 function calcProgPhase(listeTaches) {
   if (!listeTaches.length) return 0
   const terminees = listeTaches.filter((t) => t.statutTache === 'Terminer').length
@@ -113,7 +118,13 @@ function tachesDeLaColonne(statut) {
   return taches.value.filter((t) => t.statutTache === statut)
 }
 
+function calcProgressionMoyenne(affs) {
+  if (!affs.length) return 0
+  return Math.round(affs.reduce((s, a) => s + (a.progression ?? 0), 0) / affs.length)
+}
+
 // ─── Chargement ───────────────────────────────────────────────────────────────
+
 async function chargerProjet() {
   loadingProjet.value = true
   try {
@@ -154,6 +165,10 @@ async function selectionnerPhase(phase) {
   }
 }
 
+onMounted(chargerProjet)
+
+// ─── Actions projet ───────────────────────────────────────────────────────────
+
 async function demarrerProjet() {
   try {
     const updated = await projetService.modifier(projet.value.id, { statutProjet: 'En cours' })
@@ -164,19 +179,6 @@ async function demarrerProjet() {
   }
 }
 
-async function demarrerPhase(phase, e) {
-  e.stopPropagation()
-  try {
-    const updated = await phaseService.modifier(phase.id, { statutPhase: 'En cours' })
-    const idx = phases.value.findIndex((p) => p.id === phase.id)
-    if (idx !== -1) phases.value[idx] = updated
-    showToast('Phase démarrée.')
-  } catch (e) {
-    showToast('Erreur lors du démarrage.', 'error')
-  }
-}
-
-// ─── Actions projet ───────────────────────────────────────────────────────────
 function ouvrirEdition() {
   showModal.value = true
 }
@@ -200,13 +202,20 @@ async function supprimerProjet() {
   }
 }
 
-function calcProgressionMoyenne(affs) {
-  if (!affs.length) return 0
-  const total = affs.reduce((s, a) => s + (a.progression ?? 0), 0)
-  return Math.round(total / affs.length)
+// ─── Actions phase ────────────────────────────────────────────────────────────
+
+async function demarrerPhase(phase, e) {
+  e.stopPropagation()
+  try {
+    const updated = await phaseService.modifier(phase.id, { statutPhase: 'En cours' })
+    const idx = phases.value.findIndex((p) => p.id === phase.id)
+    if (idx !== -1) phases.value[idx] = updated
+    showToast('Phase démarrée.')
+  } catch (e) {
+    showToast('Erreur lors du démarrage.', 'error')
+  }
 }
 
-// ─── Actions phase ────────────────────────────────────────────────────────────
 function ouvrirCreationPhase() {
   phaseEditee.value = null
   showModalPhase.value = true
@@ -222,37 +231,6 @@ function onPhaseSaved(phase) {
   const idx = phases.value.findIndex((p) => p.id === phase.id)
   if (idx !== -1) phases.value[idx] = phase
   else phases.value.push(phase)
-}
-
-// ─── Actions tâche ────────────────────────────────────────────────────────────
-function ouvrirCreationTache() {
-  if (!phaseActive.value) return
-  tacheEditee.value = null
-  showModalTache.value = true
-}
-
-function ouvrirDetailTache(tache, e) {
-  e.stopPropagation()
-  tacheDetail.value = tache
-  showModalDetailTache.value = true
-}
-
-function onTacheDeleted(tacheId) {
-  taches.value = taches.value.filter((t) => t.id !== tacheId)
-  if (phaseActive.value) {
-    progressionParPhase.value[phaseActive.value.id] = calcProgPhase(taches.value)
-  }
-  showModalDetailTache.value = false
-}
-
-function onTacheSaved(tache) {
-  const idx = taches.value.findIndex((t) => t.id === tache.id)
-  if (idx !== -1) taches.value[idx] = tache
-  else taches.value.push(tache)
-
-  if (phaseActive.value) {
-    progressionParPhase.value[phaseActive.value.id] = calcProgPhase(taches.value)
-  }
 }
 
 function demanderSuppressionPhase(phase, e) {
@@ -278,7 +256,43 @@ async function supprimerPhaseConfirmee() {
   }
 }
 
-onMounted(chargerProjet)
+// ─── Actions tâche ────────────────────────────────────────────────────────────
+
+function ouvrirCreationTache() {
+  if (!phaseActive.value) return
+  tacheEditee.value = null
+  showModalTache.value = true
+}
+
+function ouvrirDetailTache(tache, e) {
+  e.stopPropagation()
+  tacheDetail.value = tache
+  showModalDetailTache.value = true
+}
+
+function onTacheDeleted(tacheId) {
+  taches.value = taches.value.filter((t) => t.id !== tacheId)
+  if (phaseActive.value) {
+    progressionParPhase.value[phaseActive.value.id] = calcProgPhase(taches.value)
+  }
+  showModalDetailTache.value = false
+}
+
+function onTacheSaved(tache) {
+  const idx = taches.value.findIndex((t) => t.id === tache.id)
+  if (idx !== -1) taches.value[idx] = tache
+  else taches.value.push(tache)
+  if (phaseActive.value) {
+    progressionParPhase.value[phaseActive.value.id] = calcProgPhase(taches.value)
+  }
+}
+
+// ─── Actions rapport ──────────────────────────────────────────────────────────
+
+function ouvrirRapport(projetId, phaseId = null, tacheId = null) {
+  rapportContext.value = { projetId, phaseId, tacheId }
+  showModalRapport.value = true
+}
 </script>
 
 <template>
@@ -310,6 +324,7 @@ onMounted(chargerProjet)
         <div class="p-4 sm:p-6">
           <div class="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
             <div class="min-w-0 flex-1">
+              <!-- Titre + badge -->
               <div class="flex flex-wrap items-center gap-2 mb-1">
                 <h1 class="text-lg sm:text-xl font-black text-texte">{{ projet.nom }}</h1>
                 <span
@@ -319,10 +334,11 @@ onMounted(chargerProjet)
                   {{ STATUT_PROJET[projet.statutProjet]?.label ?? projet.statutProjet }}
                 </span>
               </div>
+
+              <!-- Infos -->
               <div class="flex flex-wrap gap-3 sm:gap-4 text-xs text-muted mt-2">
                 <span class="flex items-center gap-1.5">
-                  <i class="fa-solid fa-location-dot"></i>
-                  {{ projet.adresse }}
+                  <i class="fa-solid fa-location-dot"></i>{{ projet.adresse }}
                 </span>
                 <span class="flex items-center gap-1.5">
                   <i class="fa-solid fa-calendar-day"></i>
@@ -333,9 +349,12 @@ onMounted(chargerProjet)
                   Fin prévue : {{ new Date(projet.dateDeFinPrevue).toLocaleDateString('fr-FR') }}
                 </span>
               </div>
+
               <p v-if="projet.description" class="mt-3 text-sm text-muted">
                 {{ projet.description }}
               </p>
+
+              <!-- Barre de progression globale -->
               <div class="mt-3">
                 <div class="flex items-center justify-between mb-1">
                   <span class="text-xs text-muted">Progression globale</span>
@@ -357,6 +376,17 @@ onMounted(chargerProjet)
 
             <!-- Actions projet -->
             <div v-if="canManage" class="flex flex-wrap gap-2 sm:flex-shrink-0">
+              <!-- Rapport (non-admin) -->
+              <button
+                v-if="!adminRole"
+                class="flex items-center gap-2 rounded-xl border border-bordure px-3 py-2 text-xs font-bold text-muted transition hover:bg-fond hover:text-primary"
+                @click="ouvrirRapport(Number(route.params.id))"
+              >
+                <i class="fa-solid fa-file-pen text-[10px]"></i>
+                Rapport
+              </button>
+
+              <!-- Démarrer -->
               <button
                 v-if="projet.statutProjet === 'Planifier'"
                 class="flex items-center gap-2 rounded-xl bg-secondary px-3 py-2 text-xs font-bold text-white transition hover:bg-secondary/90"
@@ -366,6 +396,7 @@ onMounted(chargerProjet)
                 Démarrer le projet
               </button>
 
+              <!-- Modifier -->
               <button
                 class="flex items-center gap-2 rounded-xl border border-bordure px-3 py-2 text-xs font-bold text-muted transition hover:bg-fond hover:text-primary"
                 @click="ouvrirEdition"
@@ -373,6 +404,8 @@ onMounted(chargerProjet)
                 <i class="fa-solid fa-pen text-[10px]"></i>
                 Modifier
               </button>
+
+              <!-- Supprimer -->
               <button
                 v-if="isAdmin"
                 class="flex items-center gap-2 rounded-xl border border-bloque/30 px-3 py-2 text-xs font-bold text-bloque transition hover:bg-bloque/10"
@@ -386,7 +419,7 @@ onMounted(chargerProjet)
         </div>
       </div>
 
-      <!-- Corps : phases + tâches -->
+      <!-- Corps : phases + kanban -->
       <div class="flex flex-col lg:flex-row gap-4 lg:min-h-[600px]">
         <!-- ── Panneau gauche : phases ── -->
         <div class="w-full lg:w-64 flex-shrink-0 flex flex-col gap-3">
@@ -397,14 +430,12 @@ onMounted(chargerProjet)
             <button
               v-if="canManage"
               class="flex h-6 w-6 items-center justify-center rounded-lg bg-primary/10 text-primary transition hover:bg-primary hover:text-white"
-              title="Ajouter une phase"
               @click="ouvrirCreationPhase"
             >
               <i class="fa-solid fa-plus text-[10px]"></i>
             </button>
           </div>
 
-          <!-- État vide phases -->
           <div
             v-if="!phases.length"
             class="rounded-2xl border border-dashed border-bordure p-6 text-center"
@@ -412,7 +443,6 @@ onMounted(chargerProjet)
             <p class="text-xs text-muted">Aucune phase créée</p>
           </div>
 
-          <!-- Liste des phases : scroll horizontal sur mobile, verticale dès lg -->
           <div class="flex gap-2 overflow-x-auto pb-1 lg:flex-col lg:overflow-visible lg:pb-0">
             <div
               v-for="phase in phases"
@@ -437,6 +467,7 @@ onMounted(chargerProjet)
                     {{ phase.libelle }}
                   </span>
                   <div class="flex items-center gap-1 flex-shrink-0">
+                    <!-- Démarrer phase -->
                     <button
                       v-if="canManage && phase.statutPhase === 'En attente'"
                       class="opacity-100 lg:opacity-0 lg:group-hover:opacity-100 transition flex items-center gap-1 rounded-lg bg-secondary/10 px-1.5 py-0.5 text-[9px] font-bold text-secondary hover:bg-secondary hover:text-white"
@@ -446,6 +477,7 @@ onMounted(chargerProjet)
                       Démarrer
                     </button>
 
+                    <!-- Modifier phase -->
                     <button
                       v-if="canManage"
                       class="opacity-100 lg:opacity-0 lg:group-hover:opacity-100 transition flex h-5 w-5 items-center justify-center rounded text-muted hover:text-primary"
@@ -453,6 +485,8 @@ onMounted(chargerProjet)
                     >
                       <i class="fa-solid fa-pen text-[9px]"></i>
                     </button>
+
+                    <!-- Supprimer phase -->
                     <button
                       v-if="isAdmin"
                       class="opacity-100 lg:opacity-0 lg:group-hover:opacity-100 transition flex h-5 w-5 items-center justify-center rounded text-muted hover:text-bloque"
@@ -460,6 +494,17 @@ onMounted(chargerProjet)
                     >
                       <i class="fa-solid fa-trash text-[9px]"></i>
                     </button>
+
+                    <!-- Rapport phase (non-admin) -->
+                    <button
+                      v-if="!adminRole"
+                      class="opacity-0 group-hover:opacity-100 transition flex h-5 w-5 items-center justify-center rounded text-muted hover:text-primary"
+                      title="Faire un rapport sur cette phase"
+                      @click.stop="ouvrirRapport(Number(route.params.id), phase.id)"
+                    >
+                      <i class="fa-solid fa-file-pen text-[9px]"></i>
+                    </button>
+
                     <i
                       class="fa-solid text-[10px]"
                       :class="[
@@ -470,6 +515,7 @@ onMounted(chargerProjet)
                   </div>
                 </div>
 
+                <!-- Barre progression phase -->
                 <div class="h-1 w-full rounded-full bg-fond overflow-hidden">
                   <div
                     class="h-1 rounded-full transition-all duration-500"
@@ -494,9 +540,8 @@ onMounted(chargerProjet)
           </div>
         </div>
 
-        <!-- ── Panneau droit : kanban des tâches ── -->
+        <!-- ── Panneau droit : kanban ── -->
         <div class="flex-1 min-w-0">
-          <!-- Header kanban -->
           <div class="mb-3 flex flex-wrap items-center justify-between gap-2">
             <div>
               <h2 class="text-sm font-black text-texte">
@@ -516,12 +561,10 @@ onMounted(chargerProjet)
             </button>
           </div>
 
-          <!-- Loader tâches -->
           <div v-if="loadingTaches" class="flex justify-center py-16">
             <i class="fa-solid fa-spinner fa-spin text-primary text-xl"></i>
           </div>
 
-          <!-- Kanban -->
           <div
             v-else-if="phaseActive"
             class="flex gap-3 overflow-x-auto pb-4 snap-x snap-mandatory"
@@ -547,15 +590,13 @@ onMounted(chargerProjet)
               <div
                 class="flex flex-col gap-2 p-2 flex-1 overflow-y-auto max-h-[400px] sm:max-h-[520px]"
               >
-                <!-- État vide -->
                 <div
                   v-if="!tachesDeLaColonne(col.statut).length"
-                  class="flex items-center justify-center py-6 text-center"
+                  class="flex items-center justify-center py-6"
                 >
                   <p class="text-[11px] text-muted/60">Aucune tâche</p>
                 </div>
 
-                <!-- Carte tâche -->
                 <div
                   v-for="tache in tachesDeLaColonne(col.statut)"
                   :key="tache.id"
@@ -563,6 +604,16 @@ onMounted(chargerProjet)
                   @click="ouvrirDetailTache(tache, $event)"
                 >
                   <p class="text-xs font-bold text-texte line-clamp-2 mb-2">{{ tache.titre }}</p>
+
+                  <!-- Bouton rapport sur la tâche (non-admin) -->
+                  <button
+                    v-if="!adminRole"
+                    class="mb-2 flex items-center gap-1 rounded-lg bg-fond px-2 py-1 text-[10px] font-bold text-muted transition hover:bg-primary/10 hover:text-primary"
+                    @click.stop="ouvrirRapport(Number(route.params.id), phaseActive?.id, tache.id)"
+                  >
+                    <i class="fa-solid fa-file-pen text-[9px]"></i>
+                    Rapport
+                  </button>
 
                   <!-- Barre de progression -->
                   <div class="mb-2">
@@ -581,7 +632,7 @@ onMounted(chargerProjet)
                     </div>
                   </div>
 
-                  <!-- Footer carte tâche -->
+                  <!-- Footer carte -->
                   <div class="flex items-center justify-between">
                     <span v-if="tache.dateDeFin" class="text-[10px] text-muted">
                       <i class="fa-solid fa-flag-checkered mr-0.5"></i>
@@ -597,7 +648,6 @@ onMounted(chargerProjet)
             </div>
           </div>
 
-          <!-- Pas de phase sélectionnée -->
           <div
             v-else
             class="flex flex-col items-center justify-center h-64 rounded-2xl border border-dashed border-bordure"
@@ -610,10 +660,10 @@ onMounted(chargerProjet)
       </div>
     </div>
 
-    <!-- Modal modification projet -->
+    <!-- ── Modals ── -->
+
     <ModalProjet v-if="showModal" :projet="projet" @close="showModal = false" @saved="onSaved" />
 
-    <!-- Modal phase -->
     <ModalPhase
       v-if="showModalPhase"
       :phase="phaseEditee"
@@ -623,7 +673,6 @@ onMounted(chargerProjet)
       @saved="onPhaseSaved"
     />
 
-    <!-- Modal tâche -->
     <ModalTache
       v-if="showModalTache"
       :tache="tacheEditee"
@@ -638,6 +687,16 @@ onMounted(chargerProjet)
       @close="showModalDetailTache = false"
       @saved="onTacheSaved"
       @deleted="onTacheDeleted"
+    />
+
+    <ModalRapport
+      v-if="showModalRapport"
+      :projets="[projet]"
+      :projet-id="rapportContext.projetId"
+      :phase-id="rapportContext.phaseId"
+      :tache-id="rapportContext.tacheId"
+      @close="showModalRapport = false"
+      @saved="() => showToast('Rapport créé.')"
     />
 
     <!-- Confirmation suppression projet -->
@@ -679,6 +738,7 @@ onMounted(chargerProjet)
         </div>
       </div>
     </Teleport>
+
     <!-- Confirmation suppression phase -->
     <Teleport to="body">
       <div
@@ -698,8 +758,8 @@ onMounted(chargerProjet)
           </div>
           <h3 class="text-base font-black text-texte mb-1">Supprimer la phase</h3>
           <p class="text-sm text-muted mb-5">
-            Cette action est irréversible. Toutes les tâches, affectations et rapports liés à
-            <strong>{{ confirmDeletePhase.libelle }}</strong> seront supprimés.
+            Cette action est irréversible. Toutes les tâches liées à
+            <strong>{{ confirmDeletePhase.libelle }}</strong> seront supprimées.
           </p>
           <div class="flex gap-3 justify-end">
             <button

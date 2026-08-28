@@ -9,10 +9,11 @@ import projetService from '@/services/projetService'
 import phaseService from '@/services/phaseService'
 import tacheService from '@/services/tacheService'
 import affectationService from '@/services/affectationService'
+import utilisateurService from '@/services/utilisateurService'
 import ModalRapport from '@/components/rapports/ModalRapport.vue'
 
 const auth = useAuthStore()
-const { isAdmin, isOuvrier, isClient, canManage } = useRole()
+const { isAdmin, isOuvrier, isClient } = useRole()
 const { showToast } = useToast()
 
 const rapports = ref([])
@@ -66,18 +67,26 @@ async function charger() {
 
     projets.value = projetsFiltres
 
-    // Charge les rapports de chaque projet accessible
     const tousLesRapports = []
+    const utilisateurs = await utilisateurService.lister()
+
     await Promise.all(
       projetsFiltres.map(async (projet) => {
         const r = await rapportService.listerParProjet(projet.id)
-        r.forEach((rapport) => tousLesRapports.push({ ...rapport, projetNom: projet.nom }))
+        r.forEach((rapport) => {
+          const auteur = utilisateurs.find((u) => u.id === rapport.auteurId)
+          tousLesRapports.push({
+            ...rapport,
+            projetNom: projet.nom,
+            auteurNom: auteur?.nom ?? null,
+          })
+        })
       }),
     )
 
-    // Trie par date décroissante
     rapports.value = tousLesRapports
       .filter((r) => !r.supprime)
+      .filter((r) => r.statutRapport === 'Publié' || r.auteurId === auth.user.id)
       .sort((a, b) => new Date(b.date) - new Date(a.date))
   } finally {
     loading.value = false
@@ -141,7 +150,6 @@ function formatDate(d) {
         <h1 class="text-2xl font-black text-texte">Rapports</h1>
         <p class="mt-1 text-sm text-muted">{{ rapports.length }} rapport(s) au total</p>
       </div>
-      <!-- Tout le monde sauf admin peut créer -->
       <button
         v-if="!isAdmin"
         class="flex items-center gap-2 rounded-xl bg-primary px-4 py-2.5 text-sm font-bold text-white shadow-soft transition hover:bg-primary/90"
@@ -153,7 +161,7 @@ function formatDate(d) {
     </div>
 
     <!-- Filtres -->
-    <div class="mb-5 flex gap-2">
+    <div class="mb-5 flex gap-2 flex-wrap">
       <button
         v-for="f in FILTRES"
         :key="f.value"
@@ -181,7 +189,7 @@ function formatDate(d) {
       <i class="fa-solid fa-spinner fa-spin text-primary text-2xl"></i>
     </div>
 
-    <!-- Liste des rapports -->
+    <!-- Liste -->
     <div v-else-if="rapportsFiltres.length" class="space-y-4">
       <div
         v-for="rapport in rapportsFiltres"
@@ -192,7 +200,7 @@ function formatDate(d) {
         <div class="p-5">
           <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
             <div class="flex-1 min-w-0">
-              <!-- Header -->
+              <!-- Badges -->
               <div class="flex items-center gap-2 mb-2 flex-wrap">
                 <span
                   class="rounded-full px-2.5 py-0.5 text-[11px] font-bold"
@@ -204,20 +212,24 @@ function formatDate(d) {
                 >
                   {{ rapport.statutRapport }}
                 </span>
-                <span class="text-xs text-muted">
-                  <i class="fa-solid fa-building mr-1 text-[10px]"></i>
+                <span class="text-xs text-muted flex items-center gap-1">
+                  <i class="fa-solid fa-user text-[10px]"></i>
+                  {{ rapport.auteurNom ?? `Auteur #${rapport.auteurId}` }}
+                </span>
+                <span class="text-xs text-muted flex items-center gap-1">
+                  <i class="fa-solid fa-building text-[10px]"></i>
                   {{ rapport.projetNom }}
                 </span>
-                <span class="text-xs text-muted">
-                  <i class="fa-solid fa-calendar mr-1 text-[10px]"></i>
+                <span class="text-xs text-muted flex items-center gap-1">
+                  <i class="fa-solid fa-calendar text-[10px]"></i>
                   {{ formatDate(rapport.date) }}
                 </span>
               </div>
 
-              <!-- Contenu préview -->
+              <!-- Contenu preview -->
               <p class="text-sm text-texte line-clamp-2">{{ rapport.contenu }}</p>
 
-              <!-- Photos -->
+              <!-- Photos miniatures -->
               <div v-if="rapport.photos?.length" class="mt-3 flex gap-2">
                 <img
                   v-for="(url, idx) in rapport.photos.slice(0, 4)"
@@ -236,7 +248,6 @@ function formatDate(d) {
 
             <!-- Actions -->
             <div class="flex gap-2 flex-shrink-0" @click.stop>
-              <!-- Supprimer — admin seulement -->
               <button
                 v-if="isAdmin"
                 class="flex items-center gap-1.5 rounded-xl border border-bloque/30 px-3 py-1.5 text-xs font-bold text-bloque transition hover:bg-bloque/10"
