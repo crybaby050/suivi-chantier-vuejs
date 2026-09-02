@@ -385,46 +385,43 @@ function ouvrirRapport(projetId, phaseId = null, tacheId = null) {
             </div>
 
             <!-- Actions projet -->
-            <div v-if="canManage" class="flex flex-wrap gap-2 sm:flex-shrink-0">
-              <!-- Rapport (non-admin) -->
-              <button
-                v-if="!adminRole"
-                class="flex items-center gap-2 rounded-xl border border-bordure px-3 py-2 text-xs font-bold text-muted transition hover:bg-fond hover:text-primary"
-                @click="ouvrirRapport(Number(route.params.id))"
-              >
-                <i class="fa-solid fa-file-pen text-[10px]"></i>
-                Rapport
-              </button>
+            <div class="flex flex-wrap gap-2 sm:flex-shrink-0">
+              <!-- Boutons canManage uniquement -->
+              <template v-if="canManage">
+                <button
+                  v-if="!adminRole"
+                  class="flex items-center gap-2 rounded-xl border border-bordure px-3 py-2 text-xs font-bold text-muted transition hover:bg-fond hover:text-primary"
+                  @click="ouvrirRapport(Number(route.params.id))"
+                >
+                  <i class="fa-solid fa-file-pen text-[10px]"></i>
+                  Rapport
+                </button>
+                <button
+                  v-if="projet.statutProjet === 'Planifier'"
+                  class="flex items-center gap-2 rounded-xl bg-secondary px-3 py-2 text-xs font-bold text-white transition hover:bg-secondary/90"
+                  @click="demarrerProjet"
+                >
+                  <i class="fa-solid fa-play text-[10px]"></i>
+                  Démarrer le projet
+                </button>
+                <button
+                  class="flex items-center gap-2 rounded-xl border border-bordure px-3 py-2 text-xs font-bold text-muted transition hover:bg-fond hover:text-primary"
+                  @click="ouvrirEdition"
+                >
+                  <i class="fa-solid fa-pen text-[10px]"></i>
+                  Modifier
+                </button>
+                <button
+                  v-if="isAdmin"
+                  class="flex items-center gap-2 rounded-xl border border-bloque/30 px-3 py-2 text-xs font-bold text-bloque transition hover:bg-bloque/10"
+                  @click="confirmDelete = true"
+                >
+                  <i class="fa-solid fa-trash text-[10px]"></i>
+                  Supprimer
+                </button>
+              </template>
 
-              <!-- Démarrer -->
-              <button
-                v-if="projet.statutProjet === 'Planifier'"
-                class="flex items-center gap-2 rounded-xl bg-secondary px-3 py-2 text-xs font-bold text-white transition hover:bg-secondary/90"
-                @click="demarrerProjet"
-              >
-                <i class="fa-solid fa-play text-[10px]"></i>
-                Démarrer le projet
-              </button>
-
-              <!-- Modifier -->
-              <button
-                class="flex items-center gap-2 rounded-xl border border-bordure px-3 py-2 text-xs font-bold text-muted transition hover:bg-fond hover:text-primary"
-                @click="ouvrirEdition"
-              >
-                <i class="fa-solid fa-pen text-[10px]"></i>
-                Modifier
-              </button>
-
-              <!-- Supprimer -->
-              <button
-                v-if="isAdmin"
-                class="flex items-center gap-2 rounded-xl border border-bloque/30 px-3 py-2 text-xs font-bold text-bloque transition hover:bg-bloque/10"
-                @click="confirmDelete = true"
-              >
-                <i class="fa-solid fa-trash text-[10px]"></i>
-                Supprimer
-              </button>
-
+              <!-- Bouton Signaler — tout le monde sauf admin, sans condition canManage -->
               <button
                 v-if="!adminRole"
                 class="flex items-center gap-2 rounded-xl border border-attente/30 px-3 py-2 text-xs font-bold text-attente transition hover:bg-attente/10"
@@ -434,7 +431,6 @@ function ouvrirRapport(projetId, phaseId = null, tacheId = null) {
                 Signaler
               </button>
             </div>
-            
           </div>
         </div>
       </div>
@@ -739,6 +735,16 @@ function ouvrirRapport(projetId, phaseId = null, tacheId = null) {
       @saved="() => showToast('Rapport créé.')"
     />
 
+    <ModalSignalement
+      v-if="showModalSignal"
+      :projets="[projet]"
+      :projet-id="signalContext.projetId"
+      :phase-id="signalContext.phaseId"
+      :tache-id="signalContext.tacheId"
+      @close="showModalSignal = false"
+      @saved="() => showToast('Signalement envoyé.')"
+    />
+
     <!-- Confirmation suppression projet -->
     <Teleport to="body">
       <div
@@ -820,13 +826,4 @@ function ouvrirRapport(projetId, phaseId = null, tacheId = null) {
       </div>
     </Teleport>
   </AppLayout>
-  <ModalSignalement
-    v-if="showModalSignal"
-    :projets="[projet]"
-    :projet-id="signalContext.projetId"
-    :phase-id="signalContext.phaseId"
-    :tache-id="signalContext.tacheId"
-    @close="showModalSignal = false"
-    @saved="() => showToast('Signalement envoyé.')"
-  />
 </template>
