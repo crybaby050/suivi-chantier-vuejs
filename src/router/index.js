@@ -57,6 +57,12 @@ const routes = [
     meta: { requiresAuth: true },
   },
   {
+    path: '/signalements',
+    name: 'Signalements',
+    component: () => import('@/views/SignalementsView.vue'),
+    meta: { requiresAuth: true },
+  },
+  {
     path: '/:pathMatch(.*)*',
     name: 'NotFound',
     component: () => import('@/views/NotFound.vue'),
