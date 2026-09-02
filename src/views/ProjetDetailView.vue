@@ -14,6 +14,8 @@ import ModalPhase from '@/components/phases/ModalPhase.vue'
 import ModalTache from '@/components/taches/ModalTache.vue'
 import ModalDetailTache from '@/components/taches/ModalDetailTache.vue'
 import ModalRapport from '@/components/rapports/ModalRapport.vue'
+import signalementService from '@/services/signalementService'
+import ModalSignalement from '@/components/signalements/ModalSignalement.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -97,6 +99,14 @@ const COLONNES_KANBAN = [
     dot: 'bg-bloque',
   },
 ]
+
+const showModalSignal = ref(false)
+const signalContext = ref({ projetId: null, phaseId: null, tacheId: null })
+
+function ouvrirSignalement(projetId, phaseId = null, tacheId = null) {
+  signalContext.value = { projetId, phaseId, tacheId }
+  showModalSignal.value = true
+}
 
 // ─── Calculés ─────────────────────────────────────────────────────────────────
 
@@ -414,7 +424,17 @@ function ouvrirRapport(projetId, phaseId = null, tacheId = null) {
                 <i class="fa-solid fa-trash text-[10px]"></i>
                 Supprimer
               </button>
+
+              <button
+                v-if="!adminRole"
+                class="flex items-center gap-2 rounded-xl border border-attente/30 px-3 py-2 text-xs font-bold text-attente transition hover:bg-attente/10"
+                @click="ouvrirSignalement(Number(route.params.id))"
+              >
+                <i class="fa-solid fa-triangle-exclamation text-[10px]"></i>
+                Signaler
+              </button>
             </div>
+            
           </div>
         </div>
       </div>
@@ -503,6 +523,15 @@ function ouvrirRapport(projetId, phaseId = null, tacheId = null) {
                       @click.stop="ouvrirRapport(Number(route.params.id), phase.id)"
                     >
                       <i class="fa-solid fa-file-pen text-[9px]"></i>
+                    </button>
+
+                    <button
+                      v-if="!adminRole"
+                      class="opacity-0 group-hover:opacity-100 transition flex h-5 w-5 items-center justify-center rounded text-muted hover:text-attente"
+                      title="Signaler cette phase"
+                      @click.stop="ouvrirSignalement(Number(route.params.id), phase.id)"
+                    >
+                      <i class="fa-solid fa-triangle-exclamation text-[9px]"></i>
                     </button>
 
                     <i
@@ -613,6 +642,17 @@ function ouvrirRapport(projetId, phaseId = null, tacheId = null) {
                   >
                     <i class="fa-solid fa-file-pen text-[9px]"></i>
                     Rapport
+                  </button>
+
+                  <button
+                    v-if="!adminRole"
+                    class="mb-2 flex items-center gap-1 rounded-lg bg-attente/10 px-2 py-1 text-[10px] font-bold text-attente transition hover:bg-attente hover:text-white"
+                    @click.stop="
+                      ouvrirSignalement(Number(route.params.id), phaseActive?.id, tache.id)
+                    "
+                  >
+                    <i class="fa-solid fa-triangle-exclamation text-[9px]"></i>
+                    Signaler
                   </button>
 
                   <!-- Barre de progression -->
@@ -780,4 +820,13 @@ function ouvrirRapport(projetId, phaseId = null, tacheId = null) {
       </div>
     </Teleport>
   </AppLayout>
+  <ModalSignalement
+    v-if="showModalSignal"
+    :projets="[projet]"
+    :projet-id="signalContext.projetId"
+    :phase-id="signalContext.phaseId"
+    :tache-id="signalContext.tacheId"
+    @close="showModalSignal = false"
+    @saved="() => showToast('Signalement envoyé.')"
+  />
 </template>
